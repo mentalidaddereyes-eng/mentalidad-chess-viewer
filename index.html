@@ -3,276 +3,69 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Visor PGN — sube tu partida + análisis</title>
-
+<title>TEST — tablero y botones</title>
 <style>
-  :root{
-    --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#9fb0c3;
-    --square-a:#f0d9b5; --square-b:#b58863; --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a; --ok:#22c55e;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
-  h1{max-width:1120px;margin:18px auto 8px;padding:0 16px;font-size:26px}
-  .wrap{max-width:1120px;margin:0 auto;padding:16px}
-  .grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
-  @media (max-width:980px){.grid{grid-template-columns:1fr}}
-  .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
-
-  /* tablero canvas */
-  #canvasBox{width:100%;max-width:720px;margin:auto}
-  canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent}
-
-  /* controles */
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  button{background:var(--btn);border:1px solid var(--btnbd);color:var(--txt);border-radius:10px;padding:10px 14px;cursor:pointer}
-  button:hover{background:var(--btnh)}
-  .primary{background:#2f7d4e;border-color:#2f7d4e}
-  input,textarea{font:inherit}
-  input[type="number"]{width:100px;background:#0b1627;border:1px solid var(--borde);border-radius:8px;padding:8px;color:var(--txt)}
-  textarea{width:100%;min-height:220px;background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px;color:var(--txt);resize:vertical;white-space:pre-wrap}
-  .box{background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
-  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
-  .note{color:var(--muted);font-size:14px}
-  .ok{color:var(--ok)}
+  body{margin:0;background:#0b1220;color:#e6edf3;font-family:system-ui,Segoe UI,Roboto,Arial}
+  .wrap{max-width:900px;margin:0 auto;padding:16px}
+  .panel{background:#101522;border:1px solid #232a36;border-radius:12px;padding:12px}
+  #board{width:100%;max-width:520px;height:auto;display:block;margin:12px auto;border:1px solid #232a36;border-radius:8px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  button{background:#2f7d4e;border:0;color:#fff;padding:10px 14px;border-radius:10px;cursor:pointer}
 </style>
-
-<!-- Reglas y PGN (chess.js) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
 </head>
 <body>
-  <h1>Visor PGN — sube tu partida + análisis</h1>
-
-  <div class="wrap grid">
-    <!-- IZQUIERDA: tablero + controles -->
-    <div class="panel">
-      <div id="canvasBox">
-        <canvas id="board" width="720" height="720"></canvas>
-      </div>
-
-      <div class="row" style="margin-top:12px">
-        <button id="prevBtn">← Anterior</button>
-        <button id="playBtn" class="primary">▶ Play</button>
-        <button id="nextBtn">Siguiente →</button>
-        <button id="resetBtn">Reiniciar</button>
-      </div>
-
-      <div class="row" style="margin-top:8px">
-        <label>Velocidad (ms) <input id="speed" type="number" value="800" min="100" step="50"></label>
-      </div>
-
-      <div id="status" class="note ok" style="margin-top:8px">OK: tablero listo.</div>
+<div class="wrap">
+  <h1>TEST — tablero y botones</h1>
+  <div class="panel">
+    <canvas id="board" width="520" height="520"></canvas>
+    <div class="row">
+      <button id="prevBtn">← Anterior</button>
+      <button id="playBtn">▶ Play</button>
+      <button id="nextBtn">Siguiente →</button>
     </div>
-
-    <!-- DERECHA: cargar PGN + análisis -->
-    <div class="panel">
-      <div class="row">
-        <input id="file" type="file" accept=".pgn,.txt">
-        <button id="loadFileBtn" class="primary">Cargar PGN</button>
-      </div>
-
-      <div class="note" style="margin:8px 0 6px">O pega un PGN aquí:</div>
-      <textarea id="pgnText">[Event "Mini"]
-[Site "-"]
-[Date "2024.09.28"]
-[Round "-"]
-[White "Blancas"]
-[Black "Negras"]
-[Result "1-0"]
-
-1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0
-      </textarea>
-
-      <div class="row" style="margin-top:8px">
-        <button id="loadTextBtn" class="primary">Cargar desde texto</button>
-        <button id="copyFenBtn">Copiar FEN actual</button>
-      </div>
-
-      <div id="gameInfo" class="note" style="margin-top:10px">Sin partida cargada.</div>
-      <div id="movesBox" class="box mono" style="margin-top:6px">Movidas aparecerán aquí…</div>
-
-      <div class="note" style="margin-top:12px">Análisis con Stockfish</div>
-      <div class="row" style="margin-top:6px">
-        <button id="analyzeBtn" class="primary">Analizar posición</button>
-        <button id="stopBtn">Detener</button>
-      </div>
-
-      <div class="row" style="gap:16px;margin-top:8px">
-        <label>Profundidad máx: <input id="maxDepth" type="number" min="6" max="30" value="18"></label>
-        <label>N. líneas: <input id="multipv" type="number" min="1" max="3" value="1"></label>
-      </div>
-
-      <div class="box" id="evalBox" style="margin-top:8px">Eval: — &nbsp;&nbsp;|&nbsp;&nbsp; Profundidad: — &nbsp;&nbsp;|&nbsp;&nbsp; Mejor jugada: —</div>
-      <div class="box mono" id="pvBox" style="margin-top:8px">Líneas de análisis aparecerán aquí…</div>
-    </div>
+    <p id="status">cargando…</p>
   </div>
+</div>
 
 <script>
-/* ===================== Tablero en canvas (sin libs visuales) ===================== */
-const canvas = document.getElementById('board');
-const ctx = canvas.getContext('2d');
-const SIZE = 720, S = SIZE/8;
-const COLORS = { light:getCss('--square-a'), dark:getCss('--square-b') };
-const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
-
-function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-
-function drawBoard(fenPieces){
-  // fondo casillas
-  for(let r=0;r<8;r++){
-    for(let c=0;c<8;c++){
-      const light = (r+c)%2===0;
-      ctx.fillStyle = light? COLORS.light : COLORS.dark;
-      ctx.fillRect(c*S, r*S, S, S);
-    }
-  }
-  // piezas unicode
-  const rows = fenPieces.split('/');
-  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
-  for(let r=0;r<8;r++){
-    let file=0;
-    for(const ch of rows[r]){
-      if(/\d/.test(ch)){ file += parseInt(ch,10); }
-      else{
-        const x=(file+0.5)*S, y=(r+0.5)*S;
-        ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#111111';
-        ctx.fillText(GLYPH[ch]||'', x, y);
-        file++;
+  // dibuja un tablero 8x8 con piezas unicode en posición inicial
+  const cv = document.getElementById('board');
+  const cx = cv.getContext('2d');
+  const S = cv.width/8;
+  const light = '#f0d9b5', dark = '#b58863';
+  const glyph = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
+  function drawBoard(){
+    for(let r=0;r<8;r++){
+      for(let c=0;c<8;c++){
+        cx.fillStyle = ((r+c)%2===0)? light : dark;
+        cx.fillRect(c*S, r*S, S, S);
       }
     }
   }
-}
-
-/* ===================== Lógica PGN (chess.js) ===================== */
-let game, frames=[], idx=0;
-
-function initGame(){
-  if(typeof Chess!=='function'){
-    document.getElementById('status').textContent = 'No se pudo cargar chess.js (reglas). Revisa tu conexión.';
-    return false;
-  }
-  game = new Chess();
-  frames = [game.fen()];
-  idx=0;
-  render();
-  return true;
-}
-
-function render(){
-  // toma solo la parte de piezas de la FEN
-  const fenPieces = (frames[idx]||game.fen()).split(' ')[0];
-  drawBoard(fenPieces);
-  document.getElementById('status').textContent = `Posición ${idx}/${frames.length-1}`;
-}
-
-function loadPGN(pgn){
-  const ok = game.load_pgn(pgn, { sloppy:true });
-  if(!ok){ alert('PGN inválido.'); return; }
-  const san = game.history();      // SAN principal
-  frames = ['startpos'];           // generaremos FEN por cada jugada
-  // reconstruir paso a paso
-  game.reset();
-  frames = [game.fen()];
-  for(const mv of san){ game.move(mv); frames.push(game.fen()); }
-  idx = 0;
-  document.getElementById('movesBox').textContent = san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
-  document.getElementById('gameInfo').textContent = `Movidas: ${san.length}`;
-  render();
-}
-
-/* ===================== Controles reproducción ===================== */
-document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; render(); } };
-document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; render(); } };
-document.getElementById('resetBtn').onclick = ()=>{ idx=0; render(); };
-
-let timer=null;
-document.getElementById('playBtn').onclick = ()=>{
-  if(timer){ clearInterval(timer); timer=null; return; }
-  const ms = Math.max(100, +document.getElementById('speed').value||800);
-  timer = setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); } else { clearInterval(timer); timer=null; } }, ms);
-};
-
-/* ===================== Cargar PGN (archivo / texto) ===================== */
-document.getElementById('loadFileBtn').onclick = async ()=>{
-  const f = document.getElementById('file').files?.[0];
-  if(!f){ alert('Selecciona un archivo .pgn'); return; }
-  const txt = await f.text();
-  loadPGN(txt);
-};
-document.getElementById('loadTextBtn').onclick = ()=>{
-  loadPGN(document.getElementById('pgnText').value);
-};
-document.getElementById('copyFenBtn').onclick = async ()=>{
-  const fen = frames[idx] || game.fen();
-  await navigator.clipboard.writeText(fen);
-  document.getElementById('status').textContent = 'FEN copiado.';
-};
-
-/* ===================== Stockfish con Worker-BLOB ===================== */
-let engine=null;
-function ensureEngine(){
-  if(engine) return engine;
-  const STOCKFISH_URL = 'https://cdn.jsdelivr.net/npm/stockfish@16/stockfish.js';
-  const code = `
-    self.onerror = function(){};
-    try { importScripts('${STOCKFISH_URL}'); }
-    catch(e){ postMessage({type:'sf-error', msg:String(e)}); }
-    // stockfish define onmessage interno; reenvío de mensajes no necesario.
-  `;
-  const blob = new Blob([code], {type:'application/javascript'});
-  const url = URL.createObjectURL(blob);
-  try{
-    engine = new Worker(url);
-  }catch(e){
-    alert('No se pudo crear el Worker de Stockfish.');
-    engine = null;
-    return null;
-  }
-  engine.onmessage = (e)=>{
-    if(e.data && e.data.type==='sf-error'){
-      document.getElementById('evalBox').textContent = 'Error cargando motor (CSP/red).';
-      return;
+  function putStart(){
+    const rows = [
+      'rnbqkbnr','pppppppp','8','8','8','8','PPPPPPPP','RNBQKBNR'
+    ];
+    cx.textAlign='center'; cx.textBaseline='middle'; cx.font='44px "Segoe UI Symbol","Noto Color Emoji",serif';
+    for(let r=0;r<8;r++){
+      let f=0;
+      for(const ch of rows[r]){
+        if(/\d/.test(ch)){ f+=parseInt(ch,10); }
+        else{
+          cx.fillStyle = /[PRNBQK]/.test(ch)? '#111' : '#fff'; // negras en oscuro, blancas en claro
+          cx.fillText(glyph[ch], (f+0.5)*S, (r+0.5)*S);
+          f++;
+        }
+      }
     }
-    const line = (typeof e.data==='string') ? e.data : (e.data?.data||'');
-    if(!line) return;
-    if(line.startsWith('info ')){
-      const depth = (line.match(/\bdepth\s+(\d+)/)||[])[1] || '—';
-      const cp    = (line.match(/\bcp\s+(-?\d+)/)||[])[1];
-      const mate  = (line.match(/\bmate\s+(-?\d+)/)||[])[1];
-      const pv    = (line.match(/\bpv\s+(.+)/)||[])[1] || '';
-      const evalTxt = mate ? ('#'+mate) : (cp? (Number(cp)/100).toFixed(2) : '—');
-      document.getElementById('evalBox').textContent =
-        `Eval: ${evalTxt}  |  Profundidad: ${depth}  |  Mejor jugada: ${(pv.split(' ')[0]||'—')}`;
-      document.getElementById('pvBox').textContent = pv;
-    }
-  };
-  return engine;
-}
-
-document.getElementById('analyzeBtn').onclick = ()=>{
-  if(!ensureEngine()) return;
-  const depth = Math.max(6, Math.min(30, +document.getElementById('maxDepth').value||18));
-  const multi = Math.max(1, Math.min(3, +document.getElementById('multipv').value||1));
-  const fen   = frames[idx] || game.fen();
-  document.getElementById('evalBox').textContent = 'Analizando…';
-  document.getElementById('pvBox').textContent   = 'Pensando…';
-  engine.postMessage('uci');
-  engine.postMessage('setoption name MultiPV value '+multi);
-  engine.postMessage('isready');
-  engine.postMessage('ucinewgame');
-  engine.postMessage('position fen '+fen);
-  engine.postMessage('go depth '+depth);
-};
-document.getElementById('stopBtn').onclick = ()=>{ if(engine) engine.postMessage('stop'); };
-
-/* ===================== Inicialización ===================== */
-window.addEventListener('load', ()=>{
-  if(initGame()){
-    // dibuja posición inicial
-    render();
-    // autollenar con PGN demo al pulsar "Cargar desde texto"
-    // (el usuario puede editar el textarea)
   }
-});
+  drawBoard(); putStart();
+  document.getElementById('status').textContent = 'OK: tablero dibujado';
+
+  // botones: solo muestran alert para verificar que funcionan
+  document.getElementById('prevBtn').onclick = ()=>alert('clic: Anterior');
+  document.getElementById('playBtn').onclick = ()=>alert('clic: Play');
+  document.getElementById('nextBtn').onclick = ()=>alert('clic: Siguiente');
 </script>
 </body>
 </html>
