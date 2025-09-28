@@ -1,86 +1,58 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Visor PGN — sube tu partida + análisis</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Visor PGN + análisis</title>
 
-  <!-- Librerías: chess.js para parsear PGN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
-
-  <style>
-    :root{
-      --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --ac:#2e7d32; --txt:#e6edf3;
-      --square-a:#d8b38a; --square-b:#b38358; --hl:#2c9; --muted:#9fb0c3;
-      --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,Segoe UI,Roboto,Inter,Arial}
-    h1{margin:24px auto 8px;max-width:1120px;padding:0 16px}
-    .wrap{max-width:1120px;margin:0 auto;padding:16px}
-    .grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
-    @media (max-width:1000px){.grid{grid-template-columns:1fr}}
-    .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
-    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-
-    /* Canvas contenedor */
-    .boardShell{background:#101522;border:1px solid var(--borde);border-radius:12px;padding:12px}
-    #canvasBox{width:100%;max-width:720px;margin:auto}
-    canvas{width:100%;max-width:720px;height:auto;display:block;border:1px solid var(--borde);border-radius:8px;background:#0000}
-
-    /* Controles */
-    button,input,textarea{font:inherit}
-    button{background:var(--btn);border:1px solid var(--btnbd);color:var(--txt);border-radius:10px;padding:10px 14px;cursor:pointer}
-    button:hover{background:var(--btnh)}
-    .play{border:1px solid #3e6bd8}
-    .green{background:var(--ac);border-color:var(--ac)}
-    .ghost{background:#1a2437}
-    .num{width:84px;text-align:center;background:#101b2e;border:1px solid var(--btnbd);border-radius:8px;padding:8px;color:var(--txt)}
-
-    .side label{display:block;margin:8px 0 6px;color:var(--muted);font-weight:600}
-    .side textarea{width:100%;height:260px;background:#0b1627;color:var(--txt);border:1px solid var(--borde);border-radius:10px;padding:10px;resize:vertical}
-    .box{min-height:48px;background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
-    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;white-space:pre-wrap}
-
-    .muted{color:var(--muted);font-size:14px}
-    .ok{margin-top:8px;color:#6bd676}
-  </style>
+<!-- Estilos mínimos -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboardjs/1.0.0/chessboard-1.0.0.min.css">
+<style>
+  body{background:#0b1220;color:#e6eef3;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0}
+  .wrap{max-width:1120px;margin:0 auto;padding:16px}
+  h1{margin:8px 0 16px;font-size:28px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .panel{background:#101522;border:1px solid #232a36;border-radius:12px;padding:12px}
+  #board{max-width:520px;margin:auto}
+  .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px}
+  button{background:#1e824c;border:none;color:#fff;padding:10px 14px;border-radius:10px;cursor:pointer}
+  button.sec{background:#283246}
+  input,textarea{width:100%;background:#0b1220;border:1px solid #232a36;color:#e6eef3;border-radius:10px;padding:10px}
+  textarea{min-height:220px;white-space:pre-wrap}
+  .kpi{display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;margin-top:8px}
+  .box{background:#0b1220;border:1px solid #232a36;border-radius:10px;padding:10px}
+  .note{opacity:.8;font-size:13px;margin-top:6px}
+  .moves{min-height:58px}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
+<div class="wrap">
   <h1>Visor PGN — sube tu partida + análisis</h1>
 
-  <div class="wrap grid">
-    <!-- IZQUIERDA: tablero + controles de reproducción -->
+  <div class="grid">
+    <!-- TABLERO -->
     <div class="panel">
-      <div class="boardShell">
-        <div id="canvasBox">
-          <canvas id="board" width="720" height="720"></canvas>
-        </div>
+      <div id="board"></div>
+      <div class="row">
+        <button id="prevBtn" class="sec">← Anterior</button>
+        <button id="playBtn">▶ Play</button>
+        <button id="nextBtn" class="sec">Siguiente →</button>
+        <button id="resetBtn" class="sec">Reiniciar</button>
       </div>
-
-      <div class="row" style="margin-top:12px">
-        <button id="prevBtn" class="ghost">← Anterior</button>
-        <button id="playBtn" class="play">▶︎ Play</button>
-        <button id="nextBtn" class="ghost">Siguiente →</button>
-        <button id="resetBtn" class="ghost">Reiniciar</button>
+      <div class="row" style="justify-content:flex-start">
+        <label>Velocidad (ms)&nbsp;<input id="speed" type="number" value="800" style="width:120px"></label>
       </div>
-
-      <div class="row" style="margin-top:10px">
-        <span class="muted">Velocidad (ms)</span>
-        <input id="speed" class="num" type="number" min="100" step="50" value="800" />
-      </div>
-
-      <div id="status" class="ok">OK: tablero dibujado.</div>
+      <div class="note" id="status">OK: tablero dibujado.</div>
     </div>
 
-    <!-- DERECHA: carga de PGN + análisis -->
-    <div class="panel side">
-      <div class="row">
-        <input id="file" type="file" accept=".pgn,.txt" />
-        <button id="loadFileBtn" class="green">Cargar PGN</button>
+    <!-- PANEL DERECHA -->
+    <div class="panel">
+      <div class="row" style="justify-content:flex-start">
+        <input id="pgnFile" type="file" accept=".pgn,.txt" style="max-width:280px">
+        <button id="loadFileBtn">Cargar PGN</button>
       </div>
 
-      <label for="pgnText">O pega aquí el PGN…</label>
       <textarea id="pgnText">[Event "Mini"]
 [Site "-"]
 [Date "2024.09.28"]
@@ -89,243 +61,189 @@
 [Black "Negras"]
 [Result "1-0"]
 
-1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0
-      </textarea>
+1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0</textarea>
 
-      <div class="row" style="margin-top:8px">
-        <button id="loadTextBtn" class="green">Cargar desde texto</button>
-        <button id="copyFenBtn">Copiar FEN actual</button>
-      </div>
-
-      <div style="margin-top:10px" class="muted" id="gameInfo">Sin partida cargada.</div>
-
-      <label style="margin-top:10px">Movidas</label>
-      <div id="movesBox" class="box mono">Movidas aparecerán aquí…</div>
-
-      <label style="margin-top:10px">Análisis con Stockfish</label>
       <div class="row">
-        <button id="analyzeBtn" class="green">Analizar posición</button>
-        <button id="stopBtn">Detener</button>
+        <button id="loadTextBtn">Cargar desde texto</button>
+        <button id="copyFenBtn" class="sec">Copiar FEN actual</button>
       </div>
 
-      <div class="row" style="margin-top:8px">
-        <div>
-          <label>Profundidad máx:</label>
-          <input id="maxDepth" type="number" min="4" max="30" value="18" class="num" />
+      <div class="box moves" id="movesBox">Movidas aparecerán aquí…</div>
+
+      <div class="row" style="justify-content:flex-start;margin-top:12px">
+        <button id="analyseBtn">Analizar posición</button>
+        <button id="stopBtn" class="sec">Detener</button>
+      </div>
+
+      <div class="kpi">
+        <div class="box">
+          <div class="note">Profundidad máx:</div>
+          <input id="maxDepth" type="number" min="6" max="30" value="18">
         </div>
-        <div>
-          <label>N. líneas:</label>
-          <input id="multipv" type="number" min="1" max="3" value="1" class="num" />
+        <div class="box">
+          <div class="note">N. líneas:</div>
+          <input id="multipv" type="number" min="1" max="3" value="1">
         </div>
+        <div class="box" id="evalBox">Eval: — &nbsp;&nbsp; Profundidad: — &nbsp;&nbsp; Mejor jugada: —</div>
       </div>
 
-      <div class="row" style="gap:24px;margin-top:8px">
-        <div>Eval: <span id="eval">—</span></div>
-        <div>Profundidad: <span id="depth">—</span></div>
-        <div>Mejor jugada: <span id="best">—</span></div>
+      <div class="box note" style="margin-top:8px">
+        Si “Analizar posición” muestra error de motor, verifica conectividad a CDN.
       </div>
-
-      <div id="linesBox" class="box mono" style="margin-top:8px">Líneas de análisis aparecerán aquí…</div>
     </div>
   </div>
+</div>
 
-  <script>
-    // ============ Tablero por canvas (sin dependencias) ============
-    const boardCanvas = document.getElementById('board');
-    const ctx = boardCanvas.getContext('2d');
-    const SIZE = 720;
-    const S = SIZE / 8; // tamaño casilla
-    const PIECES = {
-      'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔',
-      'p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'
-    };
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
+<!-- Librerías: chess.js y chessboard.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chessboardjs/1.0.0/chessboard-1.0.0.min.js"></script>
 
-    function drawBoardSquares(){
-      for(let r=0;r<8;r++){
-        for(let c=0;c<8;c++){
-          const light = (r+c)%2===0;
-          ctx.fillStyle = light ? getCss('--square-a') : getCss('--square-b');
-          ctx.fillRect(c*S, r*S, S, S);
-        }
+<script>
+/* ========= Estado global ========= */
+const game = new Chess();
+let board, timer=null, playing=false;
+let mainline = [];  // lista de FEN después de cada jugada (incluye posición inicial)
+
+/* ========= Tablero ========= */
+function drawBoard() {
+  board = Chessboard('board', {
+    position: game.fen(),
+    draggable: false,
+    pieceTheme: 'https://cdnjs.cloudflare.com/ajax/libs/chessboardjs/1.0.0/img/chesspieces/wikipedia/{piece}.png'
+  });
+  window.addEventListener('resize', board.resize);
+}
+drawBoard();
+
+/* ========= Utilidades ========= */
+function showStatus(msg){ document.getElementById('status').textContent = msg; }
+function showMoves(list){ document.getElementById('movesBox').textContent = list.join(' '); }
+function rebuildMainline() {
+  // Genera FEN por cada jugada de la línea principal
+  const tmp = new Chess();
+  mainline = [tmp.fen()];
+  const moves = game.history({verbose:true});
+  const shown = [];
+  moves.forEach((m, i) => {
+    tmp.move(m);
+    mainline.push(tmp.fen());
+    const san = tmp.undo(), sanText = game.history()[i]; // usamos SAN original
+    tmp.move(m);
+    shown.push((i%2===0 ? (Math.floor(i/2)+1)+'. ' : '') + sanText);
+  });
+  showMoves(shown);
+}
+function resetTo(i=0){
+  game.reset();
+  const tmp = new Chess();
+  for (let k=1; k<=i && k<mainline.length; k++){
+    tmp.load(mainline[k]);
+  }
+  game.load(tmp.fen());
+  board.position(game.fen());
+}
+
+/* ========= Controles ========= */
+document.getElementById('prevBtn').onclick = ()=>{
+  const i = Math.max(0, mainline.indexOf(game.fen()) - 1);
+  game.load(mainline[i]); board.position(game.fen());
+};
+document.getElementById('nextBtn').onclick = ()=>{
+  const i = Math.min(mainline.length-1, mainline.indexOf(game.fen()) + 1);
+  game.load(mainline[i]); board.position(game.fen());
+};
+document.getElementById('resetBtn').onclick = ()=>{ resetTo(0); };
+
+document.getElementById('playBtn').onclick = ()=>{
+  if (playing){ clearInterval(timer); playing=false; return; }
+  const speed = Math.max(200, Number(document.getElementById('speed').value)||800);
+  let i = mainline.indexOf(game.fen());
+  timer = setInterval(()=>{
+    i = (i+1) % mainline.length;
+    game.load(mainline[i]); board.position(game.fen());
+  }, speed);
+  playing = true;
+};
+
+/* ========= Cargar PGN ========= */
+function parsePGN(pgnText){
+  game.reset();
+  const ok = game.load_pgn(pgnText, {sloppy:true});
+  if(!ok){ alert('PGN inválido'); return; }
+  board.position(game.fen());
+  rebuildMainline();
+  showStatus('PGN cargado.');
+}
+
+document.getElementById('loadTextBtn').onclick = ()=>{
+  parsePGN(document.getElementById('pgnText').value);
+};
+document.getElementById('loadFileBtn').onclick = async ()=>{
+  const f = document.getElementById('pgnFile').files[0];
+  if(!f){ alert('Elige un archivo PGN.'); return; }
+  const txt = await f.text();
+  parsePGN(txt);
+};
+document.getElementById('copyFenBtn').onclick = async ()=>{
+  await navigator.clipboard.writeText(game.fen());
+  showStatus('FEN copiado al portapapeles.');
+};
+
+/* ========= Stockfish por CDN (Worker clásico) ========= */
+let engine = null, analyzing = false;
+
+// CDN oficial (jsDelivr o unpkg). Usa el que prefieras:
+const STOCKFISH_CDN = 'https://cdn.jsdelivr.net/npm/stockfish@16/stockfish.js';
+// const STOCKFISH_CDN = 'https://unpkg.com/stockfish@16/stockfish.js';
+
+function initEngine(){
+  try{
+    engine = new Worker(STOCKFISH_CDN);
+    engine.onmessage = (e)=>{
+      const line = (typeof e.data==='string') ? e.data : (e.data?.data||'');
+      if(line.startsWith('info')){
+        const depth = (line.match(/\bdepth\s+(\d+)/)||[])[1];
+        const cp    = (line.match(/\bcp\s+(-?\d+)/)||[])[1];
+        const mate  = (line.match(/\bmate\s+(-?\d+)/)||[])[1];
+        const pv    = (line.match(/\bpv\s+(.+)/)||[])[1];
+        let evalTxt = '—';
+        if(mate){ evalTxt = `#${mate}`; }
+        else if(cp){ evalTxt = (Number(cp)/100).toFixed(2); }
+        document.getElementById('evalBox').textContent =
+          `Eval: ${evalTxt}   —   Profundidad: ${depth||'—'}   —   Mejor jugada: ${(pv||'').split(' ')[0]||'—'}`;
+      } else if(line.startsWith('bestmove')){
+        analyzing = false;
       }
-    }
-    function drawPiecesFromFEN(fen){
-      // FEN -> solo primera parte
-      const ranks = fen.split(' ')[0].split('/');
-      for(let r=0;r<8;r++){
-        let c=0;
-        for(const ch of ranks[r]){
-          if(/\d/.test(ch)){ c += Number(ch); }
-          else{
-            const x = (c+0.5)*S, y = (r+0.5)*S;
-            ctx.fillStyle = /[PRNBQK]/.test(ch) ? '#ffffff' : '#111111';
-            ctx.fillText(PIECES[ch], x, y);
-            c++;
-          }
-        }
-      }
-    }
-    function renderFEN(fen){
-      drawBoardSquares();
-      drawPiecesFromFEN(fen);
-    }
-    function getCss(name){
-      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    }
-
-    // ============ Lógica PGN / reproducción ============
-    const game = new Chess();
-    let mainMoves = [];      // jugadas SAN
-    let frames = [];         // FEN por jugada
-    let idx = 0;             // índice actual en frames
-    let timer = null;
-
-    function resetPlayback(){
-      game.reset();
-      frames = [game.fen()];
-      idx = 0;
-      updateBoard();
-    }
-
-    function updateBoard(){
-      renderFEN(frames[idx]);
-      document.getElementById('status').textContent = `Posición ${idx} / ${frames.length-1}`;
-    }
-
-    function parsePGN(pgn){
-      const ok = game.load_pgn(pgn, { sloppy: true });
-      if(!ok){ alert('PGN inválido o no se pudo cargar.'); return; }
-      mainMoves = game.history(); // SAN
-      // Recorremos para armar frames
-      game.reset();
-      frames = [game.fen()];
-      for(const san of mainMoves){
-        game.move(san);
-        frames.push(game.fen());
-      }
-      idx = 0;
-      updateBoard();
-      // Info en panel
-      document.getElementById('gameInfo').textContent = `Movidas: ${mainMoves.length}`;
-      document.getElementById('movesBox').textContent = mainMoves.map((m,i)=> `${i+1}. ${m}`).join('  ');
-    }
-
-    // Controles
-    document.getElementById('prevBtn').onclick = ()=>{
-      if(idx>0){ idx--; updateBoard(); }
     };
-    document.getElementById('nextBtn').onclick = ()=>{
-      if(idx<frames.length-1){ idx++; updateBoard(); }
-    };
-    document.getElementById('resetBtn').onclick = ()=>{
-      idx = 0; updateBoard();
-    };
-    document.getElementById('playBtn').onclick = ()=>{
-      if(timer){ clearInterval(timer); timer=null; return; }
-      const speed = Math.max(100, Number(document.getElementById('speed').value)||800);
-      timer = setInterval(()=>{
-        if(idx<frames.length-1){ idx++; updateBoard(); }
-        else{ clearInterval(timer); timer=null; }
-      }, speed);
-    };
+  }catch(err){
+    alert('No se pudo cargar Stockfish.');
+  }
+}
 
-    // Carga PGN
-    document.getElementById('loadFileBtn').onclick = async ()=>{
-      const f = document.getElementById('file').files?.[0];
-      if(!f){ alert('Elige un archivo PGN.'); return; }
-      const txt = await f.text();
-      parsePGN(txt);
-    };
-    document.getElementById('loadTextBtn').onclick = ()=>{
-      parsePGN(document.getElementById('pgnText').value);
-    };
-    document.getElementById('copyFenBtn').onclick = ()=>{
-      const fen = frames[idx] || game.fen();
-      navigator.clipboard.writeText(fen);
-      alert('FEN copiado.');
-    };
+// Botón Analizar
+document.getElementById('analyseBtn').onclick = ()=>{
+  if(!engine){ initEngine(); }
+  if(!engine){ return; }
 
-    // ============ Stockfish (Web Worker) con fallback ============
-    let engine = null;
-    let analyzing = false;
-    function initEngine(){
-      // intenta mismo-origen
-      try{
-        engine = new Worker('./engine/stockfish.js');
-      }catch(e){
-        engine = null;
-      }
-      // fallback CDN si falló
-      if(!engine){
-        try{
-          engine = new Worker('https://cdn.jsdelivr.net/gh/niklasf/stockfish.wasm/stockfish.js');
-        }catch(e){
-          engine = null;
-        }
-      }
-      if(!engine){
-        alert('No se pudo cargar Stockfish.');
-        return false;
-      }
+  const fen = game.fen();
+  const depth = Math.max(6, Math.min(30, Number(document.getElementById('maxDepth').value)||18));
+  const multi = Math.max(1, Math.min(3, Number(document.getElementById('multipv').value)||1));
 
-      engine.onmessage = (e)=>{
-        const line = (typeof e.data === 'string') ? e.data : (e.data?.data||'');
-        if(!line) return;
-        // Ejemplos: "info depth 12 score cp 34 pv e2e4 e7e5 ..."
-        if(line.startsWith('info ')){
-          const depth = / depth (\d+)/.exec(line)?.[1];
-          const mate = / score mate (-?\d+)/.exec(line)?.[1];
-          const cp = / score cp (-?\d+)/.exec(line)?.[1];
-          const pv = / pv (.+)$/.exec(line)?.[1];
-          if(depth) document.getElementById('depth').textContent = depth;
-          if(mate){
-            document.getElementById('eval').textContent = `#${mate}`;
-          }else if(cp){
-            // Convertir centipeones a peones (+ para blancas)
-            document.getElementById('eval').textContent = (Number(cp)/100).toFixed(2);
-          }
-          if(pv){
-            document.getElementById('linesBox').textContent = pv;
-          }
-        }
-        if(line.startsWith('bestmove ')){
-          const bm = line.split(' ')[1] || '—';
-          document.getElementById('best').textContent = bm;
-          analyzing = false;
-        }
-      };
-      return true;
-    }
+  document.getElementById('evalBox').textContent = 'Analizando…';
+  analyzing = true;
 
-    document.getElementById('analyzeBtn').onclick = ()=>{
-      if(!engine){
-        const ok = initEngine();
-        if(!ok) return;
-      }
-      const fen = frames[idx] || game.fen();
-      // reset motor
-      engine.postMessage('uci');
-      engine.postMessage('isready');
-      engine.postMessage('ucinewgame');
-      engine.postMessage(`position fen ${fen}`);
-      const depth = Math.max(6, Math.min(30, Number(document.getElementById('maxDepth').value)||18));
-      const multi = Math.max(1, Math.min(3, Number(document.getElementById('multipv').value)||1));
-      document.getElementById('linesBox').textContent = 'Analizando…';
-      analyzing = true;
-      engine.postMessage(`setoption name MultiPV value ${multi}`);
-      engine.postMessage(`go depth ${depth}`);
-    };
+  engine.postMessage('uci');
+  engine.postMessage('isready');
+  engine.postMessage('ucinewgame');
+  engine.postMessage(`position fen ${fen}`);
+  engine.postMessage(`setoption name MultiPV value ${multi}`);
+  engine.postMessage(`go depth ${depth}`);
+};
 
-    document.getElementById('stopBtn').onclick = ()=>{
-      if(engine) engine.postMessage('stop');
-      analyzing = false;
-    };
-
-    // Init
-    resetPlayback(); // tablero inicial
-  </script>
+document.getElementById('stopBtn').onclick = ()=>{
+  if(engine) engine.postMessage('stop');
+  analyzing = false;
+};
+</script>
 </body>
 </html>
