@@ -198,7 +198,8 @@
     // --- Stockfish ---
     function initEngine() {
       try {
-        engine = new Worker(STOCKFISH_URL);
+        engine = new Worker(engine = new Worker('https://cdn.jsdelivr.net/npm/stockfish@16/stockfish.js');
+);
         engine.onmessage = (e) => {
           const line = (typeof e.data === 'string') ? e.data : (e.data?.data||'');
           // consola/diagnóstico
