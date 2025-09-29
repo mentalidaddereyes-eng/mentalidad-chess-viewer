@@ -8,7 +8,7 @@
 <style>
   :root{
     --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#9fb0c3;
-    --square-a:#f0d9b5; --square-b:#b58863; --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a; --ok:#22c55e;
+    --square-a:#f0d9b5; --square-b:#b58863; --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
@@ -18,7 +18,7 @@
   @media (max-width:980px){.grid{grid-template-columns:1fr}}
   .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
 
-  /* tablero canvas */
+  /* tablero canvas (responsive) */
   #canvasBox{width:100%;max-width:560px;margin:auto}
   canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent}
 
@@ -33,7 +33,7 @@
   .box{background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
   .note{color:var(--muted);font-size:14px}
-  .ok{color:var(--ok)}
+  .ok{color:#22c55e}
 </style>
 
 <!-- Reglas y PGN (chess.js) -->
@@ -60,7 +60,7 @@
         <label>Velocidad (ms) <input id="speed" type="number" value="800" min="100" step="50"></label>
       </div>
 
-      <div id="status" class="note ok" style="margin-top:8px">OK: tablero listo.</div>
+      <div id="status" class="note ok" style="margin-top:8px">OK: tablero dibujado.</div>
     </div>
 
     <!-- DERECHA: cargar PGN + análisis -->
@@ -70,7 +70,7 @@
         <button id="loadFileBtn" class="primary">Cargar PGN</button>
       </div>
 
-      <div class="note" style="margin:8px 0 6px">O pega un PGN aquí:</div>
+      <div class="note" style="margin:8px 0 6px">O pega un PGN aquí y pulsa “Cargar desde texto”:</div>
       <textarea id="pgnText">[Event "Mini"]
 [Site "-"]
 [Date "2024.09.28"]
@@ -107,10 +107,10 @@
   </div>
 
 <script>
-/* ===================== Tablero en canvas (sin libs visuales) ===================== */
+/* ===================== Tablero en canvas ===================== */
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
-const SIZE = canvas.width;               // 560
+const SIZE = canvas.width;                       // 560
 const S = SIZE/8;
 const COLORS = { light:getCss('--square-a'), dark:getCss('--square-b') };
 const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
@@ -118,23 +118,24 @@ const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'
 function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
 function drawBoard(fenPieces){
+  // casillas
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
-      const light = (r+c)%2===0;
-      ctx.fillStyle = light? COLORS.light : COLORS.dark;
+      ctx.fillStyle = ((r+c)%2===0) ? COLORS.light : COLORS.dark;
       ctx.fillRect(c*S, r*S, S, S);
     }
   }
+  // piezas
   const rows = fenPieces.split('/');
-  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
   for(let r=0;r<8;r++){
     let file=0;
     for(const ch of rows[r]){
-      if(/\d/.test(ch)){ file += parseInt(ch,10); }
+      if(/\d/.test(ch)){ file += +ch; }
       else{
-        const x=(file+0.5)*S, y=(r+0.5)*S;
         ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#111111';
-        ctx.fillText(GLYPH[ch]||'', x, y);
+        ctx.fillText(GLYPH[ch]||'', (file+0.5)*S, (r+0.5)*S);
         file++;
       }
     }
@@ -146,7 +147,7 @@ let game, frames=[], idx=0;
 
 function initGame(){
   if(typeof Chess!=='function'){
-    document.getElementById('status').textContent = 'No se pudo cargar chess.js (reglas). Revisa tu conexión.';
+    status('No se pudo cargar chess.js (revisa conexión).', false);
     return false;
   }
   game = new Chess();
@@ -159,32 +160,46 @@ function initGame(){
 function render(){
   const fenPieces = (frames[idx]||game.fen()).split(' ')[0];
   drawBoard(fenPieces);
-  document.getElementById('status').textContent = `Posición ${idx}/${frames.length-1}`;
+  status(`Posición ${idx}/${Math.max(0,frames.length-1)}`, true);
 }
 
+function status(text, ok){ const el = document.getElementById('status'); el.textContent = text; el.className = 'note ' + (ok?'ok':''); }
+
 function loadPGN(pgn){
+  // tolerante
   const ok = game.load_pgn(pgn, { sloppy:true });
-  if(!ok){ alert('PGN inválido.'); return; }
+  if(!ok){ alert('PGN inválido. Revisa cabeceras y formato.'); return; }
+
   const san = game.history();
+  // reconstruir FEN por jugada
   game.reset();
   frames = [game.fen()];
   for(const mv of san){ game.move(mv); frames.push(game.fen()); }
   idx = 0;
-  document.getElementById('movesBox').textContent = san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
+
+  // UI
+  document.getElementById('movesBox').textContent =
+    san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
   document.getElementById('gameInfo').textContent = `Movidas: ${san.length}`;
   render();
 }
 
-/* ===================== Controles reproducción ===================== */
-document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; render(); } };
-document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; render(); } };
-document.getElementById('resetBtn').onclick = ()=>{ idx=0; render(); };
+/* ===================== Controles ===================== */
+const prevBtn  = document.getElementById('prevBtn');
+const nextBtn  = document.getElementById('nextBtn');
+const resetBtn = document.getElementById('resetBtn');
+const playBtn  = document.getElementById('playBtn');
+
+prevBtn.onclick  = ()=>{ if(idx>0){ idx--; render(); } };
+nextBtn.onclick  = ()=>{ if(idx<frames.length-1){ idx++; render(); } };
+resetBtn.onclick = ()=>{ idx=0; render(); };
 
 let timer=null;
-document.getElementById('playBtn').onclick = ()=>{
-  if(timer){ clearInterval(timer); timer=null; return; }
+playBtn.onclick = ()=>{
+  if(timer){ clearInterval(timer); timer=null; playBtn.textContent='▶ Play'; return; }
   const ms = Math.max(100, +document.getElementById('speed').value||800);
-  timer = setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); } else { clearInterval(timer); timer=null; } }, ms);
+  playBtn.textContent='⏸ Pausa';
+  timer = setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); } else { clearInterval(timer); timer=null; playBtn.textContent='▶ Play'; } }, ms);
 };
 
 /* ===================== Cargar PGN (archivo / texto) ===================== */
@@ -194,40 +209,61 @@ document.getElementById('loadFileBtn').onclick = async ()=>{
   const txt = await f.text();
   loadPGN(txt);
 };
-document.getElementById('loadTextBtn').onclick = ()=>{
-  loadPGN(document.getElementById('pgnText').value);
-};
+// carga automática al seleccionar archivo
+document.getElementById('file').addEventListener('change', async (ev)=>{
+  const f = ev.target.files?.[0];
+  if (!f) return;
+  const txt = await f.text();
+  loadPGN(txt);
+});
+
+document.getElementById('loadTextBtn').onclick = ()=>{ loadPGN(document.getElementById('pgnText').value); };
 document.getElementById('copyFenBtn').onclick = async ()=>{
   const fen = frames[idx] || game.fen();
   await navigator.clipboard.writeText(fen);
-  document.getElementById('status').textContent = 'FEN copiado.';
+  status('FEN copiado.', true);
 };
 
-/* ===================== Stockfish con Worker (WASM + fallback asm.js) ===================== */
-let engine=null;
+/* ===================== Stockfish con mirrors ===================== */
+let engine = null;
 function ensureEngine(){
   if (engine) return engine;
 
-  const URL_WASM = 'https://cdn.jsdelivr.net/npm/stockfish@16.1.1/dist/stockfish.wasm.js';
-  const URL_ASM  = 'https://cdn.jsdelivr.net/npm/stockfish@16/stockfish.js';
+  const CANDIDATES = [
+    // WASM (rápido)
+    'https://cdn.jsdelivr.net/npm/stockfish@16.1.1/dist/stockfish.wasm.js',
+    'https://unpkg.com/stockfish@16.1.1/dist/stockfish.wasm.js',
+    'https://raw.githubusercontent.com/official-stockfish/Stockfish/refs/tags/sf_16.1.1/src/stockfish.wasm.js',
+    // ASM fallback
+    'https://cdn.jsdelivr.net/npm/stockfish@16/stockfish.js',
+    'https://unpkg.com/stockfish@16/stockfish.js',
+    'https://raw.githubusercontent.com/official-stockfish/Stockfish/refs/tags/sf_16/src/stockfish.js'
+  ];
 
-  const code = `
+  const loader = `
     (function(){
-      function load(u){
-        try { importScripts(u); }
-        catch(e){ postMessage({type:'sf-error',msg:String(e),url:u}); }
+      const urls = ${JSON.stringify(CANDIDATES)};
+      function tryOne(i){
+        if(i>=urls.length){
+          postMessage({type:'sf-error', msg:'No sources worked'});
+          return;
+        }
+        try{
+          importScripts(urls[i]);
+          postMessage({type:'sf-loaded', url:urls[i]});
+        }catch(e){
+          postMessage({type:'sf-load-fail', url:urls[i], msg:String(e)});
+          tryOne(i+1);
+        }
       }
-      load('${URL_WASM}');
-      if (typeof self.STOCKFISH === 'undefined' && typeof onmessage !== 'function'){
-        load('${URL_ASM}');
-      }
+      tryOne(0);
     })();
   `;
-  const blob = new Blob([code], {type:'application/javascript'});
-  const workerUrl = URL.createObjectURL(blob);
+  const blob = new Blob([loader], {type:'application/javascript'});
+  const url  = URL.createObjectURL(blob);
 
   try{
-    engine = new Worker(workerUrl);
+    engine = new Worker(url);
   }catch(e){
     alert('No se pudo crear el Worker de Stockfish.');
     engine = null;
@@ -235,13 +271,20 @@ function ensureEngine(){
   }
 
   engine.onmessage = (e)=>{
-    if (e.data && e.data.type === 'sf-error'){
-      document.getElementById('evalBox').textContent = 'No se pudo cargar Stockfish ('+e.data.url+').';
+    const d = e.data;
+    if (d?.type === 'sf-load-fail'){ /* seguirá probando */ return; }
+    if (d?.type === 'sf-error'){
+      document.getElementById('evalBox').textContent = 'No se pudo cargar Stockfish (todos los mirrors fallaron).';
+      document.getElementById('pvBox').textContent   = '';
       return;
     }
-    const line = typeof e.data === 'string' ? e.data : (e.data?.data || '');
-    if (!line) return;
+    if (d?.type === 'sf-loaded'){
+      document.getElementById('pvBox').textContent = 'Motor cargado desde: ' + d.url;
+      return;
+    }
 
+    const line = typeof d === 'string' ? d : (d?.data || '');
+    if (!line) return;
     if (line.startsWith('info ')){
       const depth = (line.match(/\bdepth\s+(\d+)/)||[])[1] || '—';
       const cp    = (line.match(/\bcp\s+(-?\d+)/)||[])[1];
@@ -274,7 +317,7 @@ document.getElementById('analyzeBtn').onclick = ()=>{
 document.getElementById('stopBtn').onclick = ()=>{ if(engine) engine.postMessage('stop'); };
 
 /* ===================== Inicialización ===================== */
-window.addEventListener('load', ()=>{ if(initGame()) render(); });
+window.addEventListener('load', ()=>{ initGame(); });
 </script>
 </body>
 </html>
