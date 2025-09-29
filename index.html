@@ -8,7 +8,10 @@
 <style>
   :root{
     --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#9fb0c3;
-    --square-a:#f0d9b5; --square-b:#b58863; --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a; --ok:#22c55e;
+    /* Colores del tablero (verde / blanco) */
+    --square-a:#e8f3e8;  /* claro */
+    --square-b:#6aa84f;  /* verde */
+    --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a; --ok:#22c55e;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
@@ -27,16 +30,17 @@
   button{background:var(--btn);border:1px solid var(--btnbd);color:var(--txt);border-radius:10px;padding:10px 14px;cursor:pointer}
   button:hover{background:var(--btnh)}
   .primary{background:#2f7d4e;border-color:#2f7d4e}
-  input,textarea{font:inherit}
+  input,textarea,label{font:inherit}
   input[type="number"]{width:100px;background:#0b1627;border:1px solid var(--borde);border-radius:8px;padding:8px;color:var(--txt)}
   textarea{width:100%;min-height:220px;background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px;color:var(--txt);resize:vertical;white-space:pre-wrap}
   .box{background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
   .note{color:var(--muted);font-size:14px}
   .ok{color:var(--ok)}
+  .spacer{flex:1}
 </style>
 
-<!-- Reglas y PGN (chess.js) -->
+<!-- Reglas / PGN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
 </head>
 <body>
@@ -58,12 +62,14 @@
 
       <div class="row" style="margin-top:8px">
         <label>Velocidad (ms) <input id="speed" type="number" value="800" min="100" step="50"></label>
+        <span class="spacer"></span>
+        <label><input id="autoAnalyze" type="checkbox" /> Auto-analizar</label>
       </div>
 
       <div id="status" class="note ok" style="margin-top:8px">OK: tablero dibujado.</div>
     </div>
 
-    <!-- DERECHA: cargar PGN + análisis -->
+    <!-- DERECHA: PGN + análisis -->
     <div class="panel">
       <div class="row">
         <input id="file" type="file" accept=".pgn,.txt">
@@ -107,245 +113,156 @@
   </div>
 
 <script>
-/* ===================== Tablero en canvas (sin libs visuales) ===================== */
+/* ===================== Tablero en canvas ===================== */
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
-const SIZE = canvas.width;        // 560
+const SIZE = canvas.width;
 const S = SIZE/8;
 const COLORS = { light:getCss('--square-a'), dark:getCss('--square-b') };
 const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
-
-function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-
+function getCss(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 function drawBoard(fenPieces){
-  // fondo casillas
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
-      const light = (r+c)%2===0;
-      ctx.fillStyle = light? COLORS.light : COLORS.dark;
+      ctx.fillStyle = ((r+c)%2===0)? COLORS.light : COLORS.dark;
       ctx.fillRect(c*S, r*S, S, S);
     }
   }
-  // piezas unicode
   const rows = fenPieces.split('/');
   ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
   for(let r=0;r<8;r++){
-    let file=0;
+    let f=0;
     for(const ch of rows[r]){
-      if(/\d/.test(ch)){ file += parseInt(ch,10); }
+      if(/\d/.test(ch)){ f+=+ch; }
       else{
-        const x=(file+0.5)*S, y=(r+0.5)*S;
-        ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#111111';
+        const x=(f+0.5)*S, y=(r+0.5)*S;
+        ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#0f1b2e';
         ctx.fillText(GLYPH[ch]||'', x, y);
-        file++;
+        f++;
       }
     }
   }
 }
 
-/* ===================== Lógica PGN (chess.js) ===================== */
+/* ===================== Lógica PGN ===================== */
 let game, frames=[], idx=0;
-
+function setStatus(msg, ok){ const s=document.getElementById('status'); s.textContent=msg; s.classList.toggle('ok',!!ok); }
 function initGame(){
-  if(typeof Chess!=='function'){
-    setStatus('No se pudo cargar chess.js (reglas). Revisa tu conexión.');
-    return false;
-  }
-  game = new Chess();
-  frames = [game.fen()];
-  idx=0;
-  render();
-  return true;
+  if(typeof Chess!=='function'){ setStatus('No se pudo cargar chess.js.',false); return false; }
+  game = new Chess(); frames=[game.fen()]; idx=0; render(); return true;
 }
-
 function render(){
-  const fenPieces = (frames[idx]||game.fen()).split(' ')[0];
+  const fenPieces=(frames[idx]||game.fen()).split(' ')[0];
   drawBoard(fenPieces);
-  setStatus(`Posición ${idx}/${Math.max(frames.length-1,0)}`);
+  setStatus(`Posición ${idx}/${Math.max(frames.length-1,0)}`, true);
+  if(document.getElementById('autoAnalyze').checked) scheduleAutoAnalyze();
 }
-
-function setStatus(msg, isOk){
-  const el = document.getElementById('status');
-  el.textContent = msg;
-  el.classList.toggle('ok', !!isOk);
+function normalizePGN(raw){
+  if(!raw) return '';
+  let p=raw.replace(/\r\n/g,'\n').replace(/^\uFEFF/,'').replace(/\u00A0/g,' ');
+  // Borra anotaciones tipo [%clk ...], [%eval ...] dentro de llaves para evitar ruido
+  p=p.replace(/\{\s*\[%.*?\]\s*\}/g,' ');
+  // Asegura línea en blanco entre encabezados y movidas si no existe
+  const lines=p.split('\n'); let i=0; while(i<lines.length && /^\s*\[.*\]\s*$/.test(lines[i])) i++;
+  if(i>0 && i<lines.length && lines[i].trim()!=='' && lines[i-1].trim()!==''){ lines.splice(i,0,''); }
+  return lines.join('\n').trim();
 }
-
 function loadPGN(pgn){
-  // Normaliza saltos de línea y elimina BOM invisibles
-  pgn = (pgn||'').replace(/\r\n/g,'\n').replace(/^\uFEFF/,'').trim();
-  if(!pgn){
-    alert('PGN vacío.');
-    return;
-  }
-  // Carga tolerante
-  const ok = game.load_pgn(pgn, { sloppy:true });
-  if(!ok){ alert('PGN inválido. Revisa el formato.'); return; }
-
-  const san = game.history();      // SAN principal
-  // reconstruir paso a paso
-  game.reset();
-  frames = [game.fen()];
+  pgn=normalizePGN(pgn);
+  const ok = game.load_pgn(pgn, {sloppy:true});
+  if(!ok){ alert('PGN inválido. Revisa formato/encabezados.'); return; }
+  const san=game.history(); game.reset(); frames=[game.fen()];
   for(const mv of san){ game.move(mv); frames.push(game.fen()); }
-  idx = 0;
-
-  // Muestra SAN bonito con números de jugada
-  const pretty = [];
-  for(let i=0;i<san.length;i++){
-    if(i%2===0) pretty.push(`${Math.floor(i/2)+1}. ${san[i]}`);
-    else pretty.push(san[i]);
-  }
-  document.getElementById('movesBox').textContent = pretty.join(' ');
-  document.getElementById('gameInfo').textContent = `Movidas: ${san.length}`;
+  idx=0;
+  const pretty=[]; for(let i=0;i<san.length;i++){ pretty.push((i%2===0? `${Math.floor(i/2)+1}. `:'')+san[i]); }
+  document.getElementById('movesBox').textContent=pretty.join(' ');
+  document.getElementById('gameInfo').textContent=`Movidas: ${san.length}`;
   render();
 }
 
-/* ===================== Controles reproducción ===================== */
+/* ===================== Controles ===================== */
 document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; render(); } };
 document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; render(); } };
 document.getElementById('resetBtn').onclick = ()=>{ idx=0; render(); };
-
 let timer=null;
 document.getElementById('playBtn').onclick = ()=>{
   if(timer){ clearInterval(timer); timer=null; return; }
-  const ms = Math.max(100, +document.getElementById('speed').value||800);
-  timer = setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); } else { clearInterval(timer); timer=null; } }, ms);
+  const ms=Math.max(100,+document.getElementById('speed').value||800);
+  timer=setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); } else { clearInterval(timer); timer=null; } },ms);
 };
-
-/* ===================== Cargar PGN (archivo / texto) ===================== */
+document.getElementById('autoAnalyze').onchange = ()=>{ if(document.getElementById('autoAnalyze').checked) scheduleAutoAnalyze(); };
 document.getElementById('loadFileBtn').onclick = async ()=>{
-  const f = document.getElementById('file').files?.[0];
+  const f=document.getElementById('file').files?.[0];
   if(!f){ alert('Selecciona un archivo .pgn'); return; }
-  try{
-    const txt = await f.text();
-    loadPGN(txt);
-  }catch(e){
-    alert('No se pudo leer el archivo.');
-  }
+  try{ const txt=await f.text(); loadPGN(txt); }catch(e){ alert('No se pudo leer el archivo.'); }
 };
-document.getElementById('loadTextBtn').onclick = ()=>{
-  loadPGN(document.getElementById('pgnText').value);
-};
+document.getElementById('loadTextBtn').onclick = ()=>{ loadPGN(document.getElementById('pgnText').value); };
 document.getElementById('copyFenBtn').onclick = async ()=>{
-  const fen = frames[idx] || game.fen();
-  try{
-    await navigator.clipboard.writeText(fen);
-    setStatus('FEN copiado.', true);
-  }catch(e){
-    setStatus('No se pudo copiar el FEN.');
-  }
+  const fen=frames[idx]||game.fen(); try{ await navigator.clipboard.writeText(fen); setStatus('FEN copiado.',true); }catch(e){ setStatus('No se pudo copiar.',false); }
 };
 
-/* ===================== Stockfish con Worker-BLOB y mirrors ===================== */
-let engine=null, engineReady=false;
-
-const STOCKFISH_CANDIDATES = [
-  // 1) CDNJS (recomendado y estable)
+/* ===================== Stockfish (mirrors + local opcional) ===================== */
+let engine=null, chosenURL=null, engineReady=false, autoTimer=null;
+const CANDIDATES=[
   'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.js',
-  // 2) jsDelivr versión directa (por si falla el 1)
   'https://cdn.jsdelivr.net/gh/niklasf/stockfish.js/stockfish.js',
-  // 3) LOCAL opcional: súbelo como /engine/stockfish.js (mismo repo/GitHub Pages)
   location.origin + '/engine/stockfish.js'
 ];
-
-async function getFirstWorkingEngineURL(){
-  for(const url of STOCKFISH_CANDIDATES){
-    const ok = await tryCreateWorker(url);
-    if(ok) return url;
-  }
-  return null;
-}
-
-function tryCreateWorker(url){
-  return new Promise(resolve=>{
-    // Creamos un Worker desde un BLOB que hace importScripts(url)
-    const code = `
-      self.onerror = function(e){ postMessage({type:'sf-error', msg:String(e&&e.message||e)}); };
-      try { importScripts('${url}'); } catch(e){ postMessage({type:'sf-error', msg:String(e)}); }
-      // Stockfish (JS/ASM/WASM) se adjunta a self.onmessage; respondemos a un 'uci' con 'uciok'
-      // En la mayoría de builds, el engine ya define su onmessage y enviará 'uciok' al pedirlo.
-    `;
-    const blobURL = URL.createObjectURL(new Blob([code], {type:'application/javascript'}));
-    let w;
-    try{ w = new Worker(blobURL); }catch(e){ resolve(false); return; }
-
-    let settled = false;
-    const timer = setTimeout(()=>{ if(!settled){ settled=true; w.terminate(); resolve(false); } }, 4000);
-
-    w.onmessage = (e)=>{
-      const line = (typeof e.data==='string') ? e.data : (e.data?.data||'');
-      if(line && /uciok/.test(line)){
-        clearTimeout(timer); settled=true; w.terminate(); resolve(true);
-      }
-    };
-    // Intenta pedir UCI para provocar 'uciok'
-    w.postMessage && w.postMessage('uci');
+function tryEngine(url){
+  return new Promise(res=>{
+    const code=`self.onerror=()=>{};try{importScripts('${url}')}catch(e){postMessage({t:'err'})}`;
+    const blob=URL.createObjectURL(new Blob([code],{type:'application/javascript'}));
+    let w; try{ w=new Worker(blob); }catch{ res(false); return; }
+    let ok=false; const t=setTimeout(()=>{ if(!ok){w.terminate();res(false);} },4000);
+    w.onmessage=e=>{ const s=(e.data&&e.data.data)||e.data||''; if(/uciok/.test(s)){ ok=true; clearTimeout(t); w.terminate(); res(true); } };
+    w.postMessage('uci');
   });
 }
-
-let chosenURL = null;
-
 async function ensureEngine(){
   if(engine) return engine;
-  document.getElementById('evalBox').textContent = 'Cargando motor…';
-  chosenURL = await getFirstWorkingEngineURL();
-  if(!chosenURL){
-    document.getElementById('evalBox').textContent = 'No se pudo cargar Stockfish (todos los mirrors fallaron).';
-    return null;
-  }
-  const code = `
-    self.onerror = function(e){ postMessage({type:'sf-error', msg:String(e&&e.message||e)}); };
-    try { importScripts('${chosenURL}'); } catch(e){ postMessage({type:'sf-error', msg:String(e)}); }
-  `;
-  const url = URL.createObjectURL(new Blob([code], {type:'application/javascript'}));
-  try{
-    engine = new Worker(url);
-  }catch(e){
-    document.getElementById('evalBox').textContent = 'No se pudo crear el Worker del motor.';
-    return null;
-  }
-  engine.onmessage = (e)=>{
-    const line = (typeof e.data==='string') ? e.data : (e.data?.data||'');
-    if(!line) return;
+  document.getElementById('evalBox').textContent='Cargando motor…';
+  for(const url of CANDIDATES){ if(await tryEngine(url)){ chosenURL=url; break; } }
+  if(!chosenURL){ document.getElementById('evalBox').textContent='No se pudo cargar Stockfish (mirrors/local).'; return null; }
+  const code=`self.onerror=()=>{};try{importScripts('${chosenURL}')}catch(e){postMessage({type:'sf-error',msg:String(e)})}`;
+  const blob=URL.createObjectURL(new Blob([code],{type:'application/javascript'}));
+  try{ engine=new Worker(blob); }catch{ document.getElementById('evalBox').textContent='No se pudo crear Worker.'; return null; }
+  engine.onmessage=(e)=>{
+    const line=(typeof e.data==='string')?e.data:(e.data?.data||''); if(!line) return;
     if(line.startsWith('info ')){
-      const depth = (line.match(/\bdepth\s+(\d+)/)||[])[1] || '—';
-      const cp    = (line.match(/\bcp\s+(-?\d+)/)||[])[1];
-      const mate  = (line.match(/\bmate\s+(-?\d+)/)||[])[1];
-      const pv    = (line.match(/\bpv\s+(.+)/)||[])[1] || '';
-      const evalTxt = mate ? ('#'+mate) : (cp? (Number(cp)/100).toFixed(2) : '—');
-      document.getElementById('evalBox').textContent =
-        `Eval: ${evalTxt}  |  Profundidad: ${depth}  |  Mejor jugada: ${(pv.split(' ')[0]||'—')}`;
-      document.getElementById('pvBox').textContent = pv;
+      const depth=(line.match(/\bdepth\s+(\d+)/)||[])[1]||'—';
+      const cp=(line.match(/\bcp\s+(-?\d+)/)||[])[1]; const mate=(line.match(/\bmate\s+(-?\d+)/)||[])[1];
+      const pv=(line.match(/\bpv\s+(.+)/)||[])[1]||''; const evalTxt=mate?('#'+mate):(cp?(Number(cp)/100).toFixed(2):'—');
+      document.getElementById('evalBox').textContent=`Eval: ${evalTxt} | Profundidad: ${depth} | Mejor jugada: ${(pv.split(' ')[0]||'—')} (motor: ${chosenURL.includes('/engine/')?'local':'CDN'})`;
+      document.getElementById('pvBox').textContent=pv;
     }
-    if(/uciok/.test(line)){ engineReady = true; }
+    if(/uciok/.test(line)) engineReady=true;
   };
-  // Inicializa
   engine.postMessage('uci');
   return engine;
 }
+function analyzePosition(){
+  if(!engine) return;
+  const depth=Math.max(6,Math.min(30,+document.getElementById('maxDepth').value||18));
+  const multi=Math.max(1,Math.min(3,+document.getElementById('multipv').value||1));
+  const fen=frames[idx]||game.fen();
+  document.getElementById('evalBox').textContent=`Motor: ${chosenURL? (chosenURL.includes('/engine/')?'local':'CDN'):'?'} | Analizando…`;
+  document.getElementById('pvBox').textContent='Pensando…';
+  engine.postMessage('stop');
+  engine.postMessage('setoption name MultiPV value '+multi);
+  engine.postMessage('isready');
+  engine.postMessage('ucinewgame');
+  engine.postMessage('position fen '+fen);
+  engine.postMessage('go depth '+depth);
+}
+function scheduleAutoAnalyze(){
+  clearTimeout(autoTimer);
+  autoTimer=setTimeout(async()=>{ const e=await ensureEngine(); if(e) analyzePosition(); }, 250);
+}
+document.getElementById('analyzeBtn').onclick = async ()=>{ const e=await ensureEngine(); if(e) analyzePosition(); };
+document.getElementById('stopBtn').onclick    = ()=>{ if(engine) engine.postMessage('stop'); };
 
-document.getElementById('analyzeBtn').onclick = async ()=>{
-  const e = await ensureEngine();
-  if(!e) return;
-  const depth = Math.max(6, Math.min(30, +document.getElementById('maxDepth').value||18));
-  const multi = Math.max(1, Math.min(3, +document.getElementById('multipv').value||1));
-  const fen   = frames[idx] || game.fen();
-  document.getElementById('evalBox').textContent = `Motor: ${chosenURL} | Analizando…`;
-  document.getElementById('pvBox').textContent   = 'Pensando…';
-  e.postMessage('setoption name MultiPV value '+multi);
-  e.postMessage('isready');
-  e.postMessage('ucinewgame');
-  e.postMessage('position fen '+fen);
-  e.postMessage('go depth '+depth);
-};
-document.getElementById('stopBtn').onclick = ()=>{ if(engine) engine.postMessage('stop'); };
-
-/* ===================== Inicialización ===================== */
-window.addEventListener('load', ()=>{
-  if(initGame()){
-    render();
-    setStatus('OK: tablero dibujado.', true);
-  }
-});
+/* ===================== Inicio ===================== */
+window.addEventListener('load', ()=>{ if(initGame()) render(); });
 </script>
 </body>
 </html>
