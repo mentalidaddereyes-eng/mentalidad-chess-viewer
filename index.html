@@ -2,68 +2,76 @@
 <html lang="es">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Visor PGN — simple</title>
-
-<!-- Chessboard.js CSS (piezas incluidas) -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard-1.0.0.min.css" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Visor PGN — sube tu partida + análisis</title>
 
 <style>
   :root{
-    --bg:#0b1220; --panel:#111a2b; --fg:#e6eef3; --mut:#9fb3c8; --acc:#29a36a; --br:#232a3a;
+    --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#9fb0c3;
+    --square-a:#f0d9b5; --square-b:#b58863; --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a; --ok:#22c55e;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial}
-  .wrap{max-width:1120px;margin:auto;padding:16px}
-  h1{font-size:28px;margin:8px 0 16px}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+  h1{max-width:1120px;margin:18px auto 8px;padding:0 16px;font-size:26px}
+  .wrap{max-width:1120px;margin:0 auto;padding:16px}
   .grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
-  @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
 
-  .card{background:var(--panel);border:1px solid var(--br);border-radius:12px;padding:12px}
-  #board{width:100%;max-width:560px;aspect-ratio:1/1;border:1px solid var(--br);border-radius:12px;margin:auto}
-  /* fallback por si aspect-ratio es ignorado */
-  @supports not (aspect-ratio: 1/1){
-    #board{height:560px}
-  }
+  /* tablero canvas */
+  #canvasBox{width:100%;max-width:720px;margin:auto}
+  canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent}
 
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
-  button{background:#20324d;border:1px solid var(--br);color:var(--fg);padding:10px 14px;border-radius:10px;cursor:pointer}
-  button.primary{background:var(--acc);border-color:transparent;color:#08130d}
-  input[type="number"], textarea{width:100%;background:#0e1728;border:1px solid var(--br);color:var(--fg);border-radius:10px;padding:10px}
-  textarea{min-height:260px;white-space:pre}
-  .mut{color:var(--mut);font-size:14px;margin-top:6px}
+  /* controles */
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button{background:var(--btn);border:1px solid var(--btnbd);color:var(--txt);border-radius:10px;padding:10px 14px;cursor:pointer}
+  button:hover{background:var(--btnh)}
+  .primary{background:#2f7d4e;border-color:#2f7d4e}
+  input,textarea{font:inherit}
+  input[type="number"]{width:100px;background:#0b1627;border:1px solid var(--borde);border-radius:8px;padding:8px;color:var(--txt)}
+  textarea{width:100%;min-height:220px;background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px;color:var(--txt);resize:vertical;white-space:pre-wrap}
+  .box{background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
+  .note{color:var(--muted);font-size:14px}
+  .ok{color:var(--ok)}
 </style>
+
+<!-- Reglas y PGN (chess.js) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Visor PGN — sube tu partida</h1>
+  <h1>Visor PGN — sube tu partida + análisis</h1>
 
-    <div class="grid">
-      <!-- TABLERO / CONTROLES -->
-      <div class="card">
-        <div id="board"></div>
-
-        <div class="row">
-          <button id="prevBtn">← Anterior</button>
-          <button id="playBtn" class="primary">▶ Play</button>
-          <button id="nextBtn">Siguiente →</button>
-          <button id="resetBtn">Reiniciar</button>
-          <label style="margin-left:auto">Velocidad (ms)
-            <input id="speed" type="number" min="100" step="100" value="800" style="width:110px">
-          </label>
-        </div>
-
-        <div id="status" class="mut">Listo.</div>
+  <div class="wrap grid">
+    <!-- IZQUIERDA: tablero + controles -->
+    <div class="panel">
+      <div id="canvasBox">
+        <canvas id="board" width="720" height="720"></canvas>
       </div>
 
-      <!-- PANEL PGN -->
-      <div class="card">
-        <div class="row">
-          <input id="file" type="file" accept=".pgn" />
-          <button id="loadFileBtn" class="primary">Cargar PGN</button>
-        </div>
+      <div class="row" style="margin-top:12px">
+        <button id="prevBtn">← Anterior</button>
+        <button id="playBtn" class="primary">▶ Play</button>
+        <button id="nextBtn">Siguiente →</button>
+        <button id="resetBtn">Reiniciar</button>
+      </div>
 
-        <textarea id="pgnText">[Event "Mini"]
+      <div class="row" style="margin-top:8px">
+        <label>Velocidad (ms) <input id="speed" type="number" value="800" min="100" step="50"></label>
+      </div>
+
+      <div id="status" class="note ok" style="margin-top:8px">OK: tablero listo.</div>
+    </div>
+
+    <!-- DERECHA: cargar PGN + análisis -->
+    <div class="panel">
+      <div class="row">
+        <input id="file" type="file" accept=".pgn,.txt">
+        <button id="loadFileBtn" class="primary">Cargar PGN</button>
+      </div>
+
+      <div class="note" style="margin:8px 0 6px">O pega un PGN aquí:</div>
+      <textarea id="pgnText">[Event "Mini"]
 [Site "-"]
 [Date "2024.09.28"]
 [Round "-"]
@@ -72,129 +80,199 @@
 [Result "1-0"]
 
 1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0
-</textarea>
+      </textarea>
 
-        <div class="row">
-          <button id="loadTextBtn" class="primary">Cargar desde texto</button>
-          <button id="copyFENBtn">Copiar FEN actual</button>
-        </div>
-
-        <div class="mut">Consejo: también puedes pegar PGN reales; se limpiarán comentarios {…}, variantes (…) y NAGs $n.</div>
+      <div class="row" style="margin-top:8px">
+        <button id="loadTextBtn" class="primary">Cargar desde texto</button>
+        <button id="copyFenBtn">Copiar FEN actual</button>
       </div>
+
+      <div id="gameInfo" class="note" style="margin-top:10px">Sin partida cargada.</div>
+      <div id="movesBox" class="box mono" style="margin-top:6px">Movidas aparecerán aquí…</div>
+
+      <div class="note" style="margin-top:12px">Análisis con Stockfish</div>
+      <div class="row" style="margin-top:6px">
+        <button id="analyzeBtn" class="primary">Analizar posición</button>
+        <button id="stopBtn">Detener</button>
+      </div>
+
+      <div class="row" style="gap:16px;margin-top:8px">
+        <label>Profundidad máx: <input id="maxDepth" type="number" min="6" max="30" value="18"></label>
+        <label>N. líneas: <input id="multipv" type="number" min="1" max="3" value="1"></label>
+      </div>
+
+      <div class="box" id="evalBox" style="margin-top:8px">Eval: — &nbsp;&nbsp;|&nbsp;&nbsp; Profundidad: — &nbsp;&nbsp;|&nbsp;&nbsp; Mejor jugada: —</div>
+      <div class="box mono" id="pvBox" style="margin-top:8px">Líneas de análisis aparecerán aquí…</div>
     </div>
   </div>
 
-  <!-- Librerías: chess.js (motor reglas) y chessboard.js (tablero) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.13.4/chess.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard-1.0.0.min.js"></script>
+<script>
+/* ===================== Tablero en canvas (sin libs visuales) ===================== */
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const SIZE = 720, S = SIZE/8;
+const COLORS = { light:getCss('--square-a'), dark:getCss('--square-b') };
+const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
 
-  <script>
-  (function(){
-    // --- estado ---
-    const game = new Chess();                // reglas y movimientos
-    const board = Chessboard('board', 'start');
-    let moves = [];                          // jugadas (verbose)
-    let idx = 0;                             // índice actual
-    let playing = false, timer = null;
+function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
-    const $ = (sel)=>document.querySelector(sel);
-    const status = $('#status');
-
-    function setStatus(msg){ status.textContent = msg; }
-
-    function render(){
-      board.position(game.fen(), true);
+function drawBoard(fenPieces){
+  // fondo casillas
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const light = (r+c)%2===0;
+      ctx.fillStyle = light? COLORS.light : COLORS.dark;
+      ctx.fillRect(c*S, r*S, S, S);
     }
-
-    function reset(){
-      game.reset();
-      idx = 0;
-      render();
-    }
-
-    function next(){
-      if (idx >= moves.length) return false;
-      game.move(moves[idx++]);
-      render();
-      return true;
-    }
-
-    function prev(){
-      if (idx <= 0) return;
-      idx--;
-      game.reset();
-      for (let i=0;i<idx;i++) game.move(moves[i]);
-      render();
-    }
-
-    function play(){
-      if (playing) return;
-      playing = true;
-      const speed = Math.max(100, Number($('#speed').value)||800);
-      timer = setInterval(()=>{
-        if (!next()){
-          stop();
-        }
-      }, speed);
-    }
-
-    function stop(){
-      playing = false;
-      if (timer){ clearInterval(timer); timer = null; }
-    }
-
-    function cleanPGN(txt){
-      // quita comentarios {…}, variantes (…), NAGs $n y etiquetas [%…]
-      return txt
-        .replace(/\{[^}]*\}/g, ' ')
-        .replace(/\([^()]*\)/g, ' ')
-        .replace(/\$[0-9]+/g, ' ')
-        .replace(/\[%[^\]]*]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-
-    function loadPGN(raw){
-      const pgn = cleanPGN(raw);
-      const ok = game.load_pgn(pgn, { sloppy: true });
-      if (!ok){
-        setStatus('PGN inválido.');
-        alert('PGN inválido.');
-        return;
+  }
+  // piezas unicode
+  const rows = fenPieces.split('/');
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
+  for(let r=0;r<8;r++){
+    let file=0;
+    for(const ch of rows[r]){
+      if(/\d/.test(ch)){ file += parseInt(ch,10); }
+      else{
+        const x=(file+0.5)*S, y=(r+0.5)*S;
+        ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#111111';
+        ctx.fillText(GLYPH[ch]||'', x, y);
+        file++;
       }
-      // rehacer historia en verbose
-      const hist = game.history({ verbose:true });
-      game.reset();
-      moves = hist;
-      idx = 0;
-      render();
-      setStatus(`PGN cargado: ${moves.length} jugadas.`);
     }
+  }
+}
 
-    // --- eventos UI ---
-    $('#loadTextBtn').onclick = ()=> loadPGN($('#pgnText').value);
+/* ===================== Lógica PGN (chess.js) ===================== */
+let game, frames=[], idx=0;
 
-    $('#loadFileBtn').onclick = async ()=>{
-      const f = $('#file').files?.[0];
-      if (!f){ alert('Selecciona un archivo .pgn'); return; }
-      const txt = await f.text();
-      loadPGN(txt);
-    };
+function initGame(){
+  if(typeof Chess!=='function'){
+    document.getElementById('status').textContent = 'No se pudo cargar chess.js (reglas). Revisa tu conexión.';
+    return false;
+  }
+  game = new Chess();
+  frames = [game.fen()];
+  idx=0;
+  render();
+  return true;
+}
 
-    $('#copyFENBtn').onclick = ()=>{
-      navigator.clipboard.writeText(game.fen());
-      setStatus('FEN copiada al portapapeles.');
-    };
+function render(){
+  // toma solo la parte de piezas de la FEN
+  const fenPieces = (frames[idx]||game.fen()).split(' ')[0];
+  drawBoard(fenPieces);
+  document.getElementById('status').textContent = `Posición ${idx}/${frames.length-1}`;
+}
 
-    $('#playBtn').onclick   = ()=> { stop(); play(); };
-    $('#prevBtn').onclick   = ()=> { stop(); prev(); };
-    $('#nextBtn').onclick   = ()=> { stop(); next(); };
-    $('#resetBtn').onclick  = ()=> { stop(); reset(); };
+function loadPGN(pgn){
+  const ok = game.load_pgn(pgn, { sloppy:true });
+  if(!ok){ alert('PGN inválido.'); return; }
+  const san = game.history();      // SAN principal
+  frames = ['startpos'];           // generaremos FEN por cada jugada
+  // reconstruir paso a paso
+  game.reset();
+  frames = [game.fen()];
+  for(const mv of san){ game.move(mv); frames.push(game.fen()); }
+  idx = 0;
+  document.getElementById('movesBox').textContent = san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
+  document.getElementById('gameInfo').textContent = `Movidas: ${san.length}`;
+  render();
+}
 
-    // dibuja tablero inicial
+/* ===================== Controles reproducción ===================== */
+document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; render(); } };
+document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; render(); } };
+document.getElementById('resetBtn').onclick = ()=>{ idx=0; render(); };
+
+let timer=null;
+document.getElementById('playBtn').onclick = ()=>{
+  if(timer){ clearInterval(timer); timer=null; return; }
+  const ms = Math.max(100, +document.getElementById('speed').value||800);
+  timer = setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); } else { clearInterval(timer); timer=null; } }, ms);
+};
+
+/* ===================== Cargar PGN (archivo / texto) ===================== */
+document.getElementById('loadFileBtn').onclick = async ()=>{
+  const f = document.getElementById('file').files?.[0];
+  if(!f){ alert('Selecciona un archivo .pgn'); return; }
+  const txt = await f.text();
+  loadPGN(txt);
+};
+document.getElementById('loadTextBtn').onclick = ()=>{
+  loadPGN(document.getElementById('pgnText').value);
+};
+document.getElementById('copyFenBtn').onclick = async ()=>{
+  const fen = frames[idx] || game.fen();
+  await navigator.clipboard.writeText(fen);
+  document.getElementById('status').textContent = 'FEN copiado.';
+};
+
+/* ===================== Stockfish con Worker-BLOB ===================== */
+let engine=null;
+function ensureEngine(){
+  if(engine) return engine;
+  const STOCKFISH_URL = 'https://cdn.jsdelivr.net/npm/stockfish@16/stockfish.js';
+  const code = `
+    self.onerror = function(){};
+    try { importScripts('${STOCKFISH_URL}'); }
+    catch(e){ postMessage({type:'sf-error', msg:String(e)}); }
+    // stockfish define onmessage interno; reenvío de mensajes no necesario.
+  `;
+  const blob = new Blob([code], {type:'application/javascript'});
+  const url = URL.createObjectURL(blob);
+  try{
+    engine = new Worker(url);
+  }catch(e){
+    alert('No se pudo crear el Worker de Stockfish.');
+    engine = null;
+    return null;
+  }
+  engine.onmessage = (e)=>{
+    if(e.data && e.data.type==='sf-error'){
+      document.getElementById('evalBox').textContent = 'Error cargando motor (CSP/red).';
+      return;
+    }
+    const line = (typeof e.data==='string') ? e.data : (e.data?.data||'');
+    if(!line) return;
+    if(line.startsWith('info ')){
+      const depth = (line.match(/\bdepth\s+(\d+)/)||[])[1] || '—';
+      const cp    = (line.match(/\bcp\s+(-?\d+)/)||[])[1];
+      const mate  = (line.match(/\bmate\s+(-?\d+)/)||[])[1];
+      const pv    = (line.match(/\bpv\s+(.+)/)||[])[1] || '';
+      const evalTxt = mate ? ('#'+mate) : (cp? (Number(cp)/100).toFixed(2) : '—');
+      document.getElementById('evalBox').textContent =
+        `Eval: ${evalTxt}  |  Profundidad: ${depth}  |  Mejor jugada: ${(pv.split(' ')[0]||'—')}`;
+      document.getElementById('pvBox').textContent = pv;
+    }
+  };
+  return engine;
+}
+
+document.getElementById('analyzeBtn').onclick = ()=>{
+  if(!ensureEngine()) return;
+  const depth = Math.max(6, Math.min(30, +document.getElementById('maxDepth').value||18));
+  const multi = Math.max(1, Math.min(3, +document.getElementById('multipv').value||1));
+  const fen   = frames[idx] || game.fen();
+  document.getElementById('evalBox').textContent = 'Analizando…';
+  document.getElementById('pvBox').textContent   = 'Pensando…';
+  engine.postMessage('uci');
+  engine.postMessage('setoption name MultiPV value '+multi);
+  engine.postMessage('isready');
+  engine.postMessage('ucinewgame');
+  engine.postMessage('position fen '+fen);
+  engine.postMessage('go depth '+depth);
+};
+document.getElementById('stopBtn').onclick = ()=>{ if(engine) engine.postMessage('stop'); };
+
+/* ===================== Inicialización ===================== */
+window.addEventListener('load', ()=>{
+  if(initGame()){
+    // dibuja posición inicial
     render();
-    setStatus('OK: tablero dibujado.');
-  })();
-  </script>
+    // autollenar con PGN demo al pulsar "Cargar desde texto"
+    // (el usuario puede editar el textarea)
+  }
+});
+</script>
 </body>
 </html>
