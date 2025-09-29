@@ -2,38 +2,253 @@
 <html lang="es">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Visor PGN — reproducción básica</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Visor PGN — sube tu partida</title>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <style>
-  body{margin:0;background:#0b1220;color:#e6edf3;font-family:system-ui,Segoe UI,Roboto,Arial}
-  .wrap{max-width:1000px;margin:0 auto;padding:16px}
-  .grid{display:grid;grid-template-columns:1fr 360px;gap:16px}
-  @media (max-width:900px){.grid{grid-template-columns:1fr}}
-  .panel{background:#101522;border:1px solid #232a36;border-radius:12px;padding:12px}
-  #board{width:100%;max-width:520px;height:auto;display:block;margin:12px auto;border:1px solid #232a36;border-radius:8px}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}
-  button{background:#2f7d4e;border:0;color:#fff;padding:10px 14px;border-radius:10px;cursor:pointer}
-  button.secondary{background:#283246}
-  input[type="number"]{width:100px;background:#0b1627;border:1px solid #232a36;border-radius:8px;padding:8px;color:#e6edf3}
-  textarea{width:100%;min-height:200px;background:#0b1627;border:1px solid #232a36;border-radius:10px;padding:10px;color:#e6edf3;white-space:pre-wrap}
-  .box{background:#0b1627;border:1px solid #232a36;border-radius:10px;padding:10px}
-  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
-  .note{opacity:.85}
+  :root{--bg:#0b1220;--panel:#101a2b;--fg:#e6eef3;--mut:#9fb3c8;--acc:#2ea36a;--br:#232a36}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,Segoe UI,Inter,Roboto,Helvetica,Arial}
+  .wrap{max-width:1120px;margin:0 auto;padding:16px}
+  h2{margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
+  .panel{background:var(--panel);border:1px solid var(--br);border-radius:12px;padding:12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button,.btn{background:#243149;border:1px solid var(--br);color:var(--fg);padding:8px 12px;border-radius:10px;cursor:pointer}
+  button.green{background:var(--acc);border:none;color:#05160c}
+  input[type="number"],input[type="text"],textarea{background:#0f1626;color:var(--fg);border:1px solid var(--br);border-radius:10px;padding:8px}
+  textarea{width:100%;min-height:180px;resize:vertical}
+  /* tablero (8x8 grid con Unicode) */
+  .board{width:100%;max-width:560px;aspect-ratio:1/1;border:1px solid var(--br);border-radius:12px;overflow:hidden;user-select:none}
+  .board .g{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr)}
+  .sq{display:flex;align-items:center;justify-content:center;font-size:40px}
+  .light{background:#f0d9b5}.dark{background:#b58863}
+  .moves{height:200px;background:#0f1626;border:1px solid var(--br);border-radius:10px;padding:10px;overflow:auto;color:var(--mut)}
+  .tag{display:inline-block;margin-right:6px;color:var(--mut)}
 </style>
-<!-- Reglas de ajedrez / PGN -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
 </head>
 <body>
 <div class="wrap">
-  <h1>Visor PGN — reproducción básica</h1>
+  <h2>Visor PGN — sube tu partida</h2>
 
   <div class="grid">
-    <!-- Tablero + controles -->
+    <!-- IZQUIERDA: Tablero + controles -->
     <div class="panel">
-      <canvas id="board" width="520" height="520"></canvas>
-
+      <div id="board" class="board"><div class="g" id="grid"></div></div>
       <div class="row" style="margin-top:12px">
-        <button id="prevBtn" class="secondary">← Anterior</button>
+        <button id="prevBtn">← Anterior</button>
+        <button id="playBtn">▶ Play</button>
+        <button id="nextBtn">Siguiente →</button>
+        <button id="resetBtn">Reiniciar</button>
+        <span style="margin-left:auto">Velocidad (ms)</span>
+        <input id="speed" type="number" value="800" min="100" step="50" style="width:90px">
+      </div>
+      <div id="status" class="tag" style="margin-top:8px">OK: tablero dibujado.</div>
+    </div>
+
+    <!-- DERECHA: Carga y PGN -->
+    <div class="panel">
+      <div class="row">
+        <input id="pgnFile" type="file" accept=".pgn">
+        <button id="loadFileBtn" class="green">Cargar PGN</button>
+      </div>
+      <textarea id="pgnText" placeholder="O pega aquí el PGN...">[Event "Mini"]
+[Site "-"]
+[Date "2024.09.28"]
+[Round "-"]
+[White "Blancas"]
+[Black "Negras"]
+[Result "1-0"]
+
+1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0
+</textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="loadTextBtn" class="green">Cargar desde texto</button>
+        <button id="copyFenBtn">Copiar FEN actual</button>
+      </div>
+      <div style="margin-top:12px;font-weight:600">Movidas aparecerán aquí…</div>
+      <div id="movesBox" class="moves"></div>
+    </div>
+  </div>
+</div>
+
+<!-- chess.js para parsear PGN (CDN) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.13.4/chess.min.js"></script>
+<script>
+/* ===== Render tablero con Unicode ===== */
+const PIECE_UNI = {
+  'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔',
+  'p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'
+};
+const grid = document.getElementById('grid');
+function drawEmptyBoard(){
+  grid.innerHTML = '';
+  for(let r=7;r>=0;r--){
+    for(let c=0;c<8;c++){
+      const d = document.createElement('div');
+      d.className = 'sq ' + (((r+c)%2)?'dark':'light');
+      d.dataset.rc = `${r}${c}`;
+      d.textContent = '';
+      grid.appendChild(d);
+    }
+  }
+}
+function drawFEN(fen){
+  drawEmptyBoard();
+  const [piecePlacement] = fen.split(' ');
+  let r=7,c=0;
+  for(const ch of piecePlacement){
+    if(ch === '/'){ r--; c=0; continue; }
+    if(/[1-8]/.test(ch)){ c += parseInt(ch,10); continue; }
+    // dibujar pieza
+    const idx = (7-r)*8 + c; // porque agregamos de arriba a abajo
+    grid.children[idx].textContent = PIECE_UNI[ch] || '';
+    c++;
+  }
+}
+
+/* ===== Estado de la reproducción ===== */
+let game = new Chess();
+let frames = [];   // FEN por jugada (incluye inicial)
+let ply = 0;       // índice actual
+let timer = null;
+
+function setStatus(msg){ document.getElementById('status').textContent = msg; }
+
+function refresh(){
+  drawFEN(frames[ply]);
+  document.getElementById('movesBox').scrollTop = document.getElementById('movesBox').scrollHeight;
+}
+
+function rebuildFromPGN(pgn){
+  const loaded = game.load_pgn(pgn, { sloppy: true });
+  if(!loaded) return false;
+  // construir frames
+  const g = new Chess();
+  frames = [g.fen()];
+  for(const mv of g.history({verbose:false,sloppy:true})); // noop
+  const moves = game.history({ verbose:false });
+  const list = [];
+  const tmp = new Chess();
+  frames = [tmp.fen()];
+  for(let i=0;i<moves.length;i++){
+    const san = moves[i];
+    const ok = tmp.move(san, {sloppy:true});
+    if(!ok) return false;
+    frames.push(tmp.fen());
+    const num = Math.floor(i/2)+1;
+    if(i%2===0) list.push(`${num}. ${san}`);
+    else list[list.length-1] += ` ${san}`;
+  }
+  // pintar lista
+  const box = document.getElementById('movesBox');
+  box.innerHTML = list.map(l=>`<div>${l}</div>`).join('');
+  ply = 0;
+  setStatus(`Cargadas ${moves.length} jugadas.`);
+  return true;
+}
+
+/* ===== Utilidades PGN robustas ===== */
+function normalizeNewlines(s){ return s.replace(/\r\n?/g,"\n"); }
+function stripBOM(s){ return s.replace(/^\uFEFF/,""); }
+function takeFirstGame(pgn){
+  const start = pgn.indexOf('[Event');
+  if(start === -1) return pgn;
+  const rest = pgn.slice(start+6);
+  const next = rest.indexOf('\n[Event');
+  return next === -1 ? pgn.slice(start) : pgn.slice(start, start+6+next);
+}
+function cleanPGN(pgn){
+  let t = pgn;
+  t = t.replace(/\$[0-9]+/g, '');
+  t = t.replace(/\[%clk [^\]]*]/g, '');
+  t = t.replace(/\[%emt [^\]]*]/g, '');
+  t = t.replace(/\{[^}]*\}/g, '');
+  t = t.replace(/;.*$/gm, '');
+  return t;
+}
+async function readFileAsTextSmart(file){
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const hasUTF8   = bytes.length>=3 && bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF;
+  const hasUTF16L = bytes.length>=2 && bytes[0]===0xFF && bytes[1]===0xFE;
+  const hasUTF16B = bytes.length>=2 && bytes[0]===0xFE && bytes[1]===0xFF;
+  try{
+    if(hasUTF16L) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+    if(hasUTF16B) return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+    if(hasUTF8)   return new TextDecoder('utf-8').decode(bytes.subarray(3));
+    const zeros = bytes.filter(b=>b===0).length;
+    if(zeros > bytes.length*0.2){
+      try { return new TextDecoder('utf-16le').decode(bytes); } catch{}
+      try { return new TextDecoder('utf-16be').decode(bytes); } catch{}
+    }
+    try { return new TextDecoder('utf-8',{fatal:true}).decode(bytes); } catch{}
+    return new TextDecoder('windows-1252').decode(bytes);
+  }catch{
+    return new TextDecoder().decode(bytes);
+  }
+}
+
+/* ===== Eventos UI ===== */
+document.getElementById('prevBtn').onclick = ()=>{
+  if(ply>0){ ply--; refresh(); }
+};
+document.getElementById('nextBtn').onclick = ()=>{
+  if(ply<frames.length-1){ ply++; refresh(); }
+};
+document.getElementById('playBtn').onclick = ()=>{
+  if(timer){ clearInterval(timer); timer=null; setStatus('Pausa'); return; }
+  const sp = Math.max(100, Number(document.getElementById('speed').value)||800);
+  timer = setInterval(()=>{
+    if(ply<frames.length-1){ ply++; refresh(); }
+    else { clearInterval(timer); timer=null; setStatus('Fin'); }
+  }, sp);
+  setStatus('Reproduciendo…');
+};
+document.getElementById('resetBtn').onclick = ()=>{
+  if(timer){ clearInterval(timer); timer=null; }
+  ply = 0; refresh(); setStatus('Reiniciado');
+};
+document.getElementById('copyFenBtn').onclick = ()=>{
+  navigator.clipboard.writeText(frames[ply]||'').then(()=>setStatus('FEN copiado'));
+};
+
+document.getElementById('loadTextBtn').onclick = ()=>{
+  let txt = document.getElementById('pgnText').value;
+  txt = stripBOM(normalizeNewlines(txt));
+  txt = takeFirstGame(txt);
+  if(!rebuildFromPGN(txt)){
+    const cleaned = cleanPGN(txt);
+    if(!rebuildFromPGN(cleaned)){
+      alert('PGN inválido.');
+      return;
+    }
+  }
+  refresh();
+};
+
+document.getElementById('loadFileBtn').onclick = async ()=>{
+  const f = document.getElementById('pgnFile').files?.[0];
+  if(!f){ alert('Selecciona un archivo .pgn'); return; }
+  let raw = await readFileAsTextSmart(f);
+  raw = stripBOM(normalizeNewlines(raw));
+  raw = takeFirstGame(raw);
+  if(!rebuildFromPGN(raw)){
+    const cleaned = cleanPGN(raw);
+    if(!rebuildFromPGN(cleaned)){
+      alert('PGN inválido.');
+      return;
+    }
+  }
+  refresh();
+};
+
+/* ===== Inicio ===== */
+drawEmptyBoard();
+frames = [game.fen()]; // posición inicial
+refresh();
+</script>
+</body>
+</html>
         <button id="playBtn">▶ Play</button>
         <button id="nextBtn" class="secondary">Siguiente →</button>
         <button id="resetBtn" class="secondary">Reiniciar</button>
