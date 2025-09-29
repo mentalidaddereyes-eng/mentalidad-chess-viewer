@@ -4,28 +4,27 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Visor PGN — sube tu partida + análisis</title>
-
 <style>
   :root{
     --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#9fb0c3;
-    /* Colores del tablero (verde / blanco) */
-    --square-a:#e8f3e8;  /* claro */
-    --square-b:#6aa84f;  /* verde */
+    --sqA:#e9f5ea; --sqB:#6aa84f;         /* tablero verde/blanco */
+    --hl1:#ffec99; --hl2:#ffe066;         /* resaltado último movimiento */
+    --arrow:#ffd43b;                       /* flecha mejor jugada */
     --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a; --ok:#22c55e;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
-  h1{max-width:1120px;margin:18px auto 8px;padding:0 16px;font-size:26px}
-  .wrap{max-width:1120px;margin:0 auto;padding:16px}
-  .grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
-  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  h1{max-width:1180px;margin:18px auto 8px;padding:0 16px;font-size:26px}
+  .wrap{max-width:1180px;margin:0 auto;padding:16px}
+  .grid{display:grid;grid-template-columns:640px 1fr;gap:16px}
+  @media (max-width:1060px){.grid{grid-template-columns:1fr}}
   .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
 
-  /* tablero canvas */
-  #canvasBox{width:100%;max-width:560px;margin:auto}
-  canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent}
+  /* tablero con overlay para flechas */
+  .boardWrap{width:100%;max-width:640px;margin:auto;position:relative}
+  canvas#board{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:12px;background:transparent}
+  canvas#overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
 
-  /* controles */
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   button{background:var(--btn);border:1px solid var(--btnbd);color:var(--txt);border-radius:10px;padding:10px 14px;cursor:pointer}
   button:hover{background:var(--btnh)}
@@ -38,46 +37,54 @@
   .note{color:var(--muted);font-size:14px}
   .ok{color:var(--ok)}
   .spacer{flex:1}
+
+  /* barra de evaluación */
+  .evalRow{display:flex;align-items:center;gap:10px;margin-top:8px}
+  .evalBar{position:relative;width:18px;height:220px;border-radius:9px;border:1px solid var(--borde);overflow:hidden;background:linear-gradient(#fff,#2b2b2b)}
+  .evalThumb{position:absolute;left:0;width:100%;height:4px;background:#5eead4;box-shadow:0 0 6px #5eead4}
+  .evalText{min-height:24px}
+  .pv{line-height:1.5}
+  .pv span.mno{color:#8fb3ff}
 </style>
 
-<!-- Reglas / PGN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
 </head>
 <body>
-  <h1>Visor PGN — sube tu partida + análisis</h1>
+<h1>Visor PGN — sube tu partida + análisis</h1>
 
-  <div class="wrap grid">
-    <!-- IZQUIERDA: tablero + controles -->
-    <div class="panel">
-      <div id="canvasBox">
-        <canvas id="board" width="560" height="560" aria-label="Tablero de ajedrez"></canvas>
-      </div>
-
-      <div class="row" style="margin-top:12px">
-        <button id="prevBtn">← Anterior</button>
-        <button id="playBtn" class="primary">▶ Play</button>
-        <button id="nextBtn">Siguiente →</button>
-        <button id="resetBtn">Reiniciar</button>
-      </div>
-
-      <div class="row" style="margin-top:8px">
-        <label>Velocidad (ms) <input id="speed" type="number" value="800" min="100" step="50"></label>
-        <span class="spacer"></span>
-        <label><input id="autoAnalyze" type="checkbox" /> Auto-analizar</label>
-      </div>
-
-      <div id="status" class="note ok" style="margin-top:8px">OK: tablero dibujado.</div>
+<div class="wrap grid">
+  <!-- IZQUIERDA -->
+  <div class="panel">
+    <div class="boardWrap">
+      <canvas id="board" width="640" height="640" aria-label="Tablero"></canvas>
+      <canvas id="overlay" width="640" height="640"></canvas>
     </div>
 
-    <!-- DERECHA: PGN + análisis -->
-    <div class="panel">
-      <div class="row">
-        <input id="file" type="file" accept=".pgn,.txt">
-        <button id="loadFileBtn" class="primary">Cargar PGN</button>
-      </div>
+    <div class="row" style="margin-top:12px">
+      <button id="prevBtn">← Anterior</button>
+      <button id="playBtn" class="primary">▶ Play</button>
+      <button id="nextBtn">Siguiente →</button>
+      <button id="resetBtn">Reiniciar</button>
+    </div>
 
-      <div class="note" style="margin:8px 0 6px">O pega un PGN aquí:</div>
-      <textarea id="pgnText">[Event "Mini"]
+    <div class="row" style="margin-top:8px">
+      <label>Velocidad (ms) <input id="speed" type="number" value="800" min="100" step="50"></label>
+      <span class="spacer"></span>
+      <label><input id="autoAnalyze" type="checkbox"> Auto-analizar</label>
+    </div>
+
+    <div id="status" class="note ok" style="margin-top:8px">OK: tablero dibujado.</div>
+  </div>
+
+  <!-- DERECHA -->
+  <div class="panel">
+    <div class="row">
+      <input id="file" type="file" accept=".pgn,.txt">
+      <button id="loadFileBtn" class="primary">Cargar PGN</button>
+    </div>
+
+    <div class="note" style="margin:8px 0 6px">O pega un PGN aquí:</div>
+    <textarea id="pgnText">[Event "Mini"]
 [Site "-"]
 [Date "2024.09.28"]
 [Round "-"]
@@ -86,123 +93,194 @@
 [Result "1-0"]
 
 1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0
-      </textarea>
+    </textarea>
 
-      <div class="row" style="margin-top:8px">
-        <button id="loadTextBtn" class="primary">Cargar desde texto</button>
-        <button id="copyFenBtn">Copiar FEN actual</button>
+    <div class="row" style="margin-top:8px">
+      <button id="loadTextBtn" class="primary">Cargar desde texto</button>
+      <button id="copyFenBtn">Copiar FEN actual</button>
+    </div>
+
+    <div id="gameInfo" class="note" style="margin-top:10px">Sin partida cargada.</div>
+    <div id="movesBox" class="box mono" style="margin-top:6px">Movidas aparecerán aquí…</div>
+
+    <div class="note" style="margin-top:12px">Análisis con Stockfish</div>
+    <div class="row" style="margin-top:6px">
+      <button id="analyzeBtn" class="primary">Analizar posición</button>
+      <button id="stopBtn">Detener</button>
+    </div>
+
+    <div class="row" style="gap:16px;margin-top:8px">
+      <label>Profundidad máx: <input id="maxDepth" type="number" min="6" max="30" value="18"></label>
+      <label>N. líneas: <input id="multipv" type="number" min="1" max="3" value="1"></label>
+    </div>
+
+    <div class="evalRow">
+      <div class="evalBar"><div id="evalThumb" class="evalThumb" style="top:50%"></div></div>
+      <div class="spacer">
+        <div id="evalBox" class="box">Eval: — | Profundidad: — | Mejor jugada: —</div>
+        <div id="pvBox" class="box mono pv" style="margin-top:8px">Líneas de análisis aparecerán aquí…</div>
       </div>
-
-      <div id="gameInfo" class="note" style="margin-top:10px">Sin partida cargada.</div>
-      <div id="movesBox" class="box mono" style="margin-top:6px">Movidas aparecerán aquí…</div>
-
-      <div class="note" style="margin-top:12px">Análisis con Stockfish</div>
-      <div class="row" style="margin-top:6px">
-        <button id="analyzeBtn" class="primary">Analizar posición</button>
-        <button id="stopBtn">Detener</button>
-      </div>
-
-      <div class="row" style="gap:16px;margin-top:8px">
-        <label>Profundidad máx: <input id="maxDepth" type="number" min="6" max="30" value="18"></label>
-        <label>N. líneas: <input id="multipv" type="number" min="1" max="3" value="1"></label>
-      </div>
-
-      <div class="box" id="evalBox" style="margin-top:8px">Eval: — &nbsp;&nbsp;|&nbsp;&nbsp; Profundidad: — &nbsp;&nbsp;|&nbsp;&nbsp; Mejor jugada: —</div>
-      <div class="box mono" id="pvBox" style="margin-top:8px">Líneas de análisis aparecerán aquí…</div>
     </div>
   </div>
+</div>
 
 <script>
-/* ===================== Tablero en canvas ===================== */
-const canvas = document.getElementById('board');
-const ctx = canvas.getContext('2d');
-const SIZE = canvas.width;
-const S = SIZE/8;
-const COLORS = { light:getCss('--square-a'), dark:getCss('--square-b') };
-const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
+/* ========== Config tablero y dibujo ========== */
+const b = document.getElementById('board');
+const ctx = b.getContext('2d');
+const ov = document.getElementById('overlay');
+const octx = ov.getContext('2d');
+const L = b.width, S = L/8;
+const COL = {A:getCss('--sqA'), B:getCss('--sqB'), HL1:getCss('--hl1'), HL2:getCss('--hl2'), AR:getCss('--arrow')};
+const GLYPH={'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
 function getCss(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+let lastFrom=null,lastTo=null,bestArrow=null;
+
 function drawBoard(fenPieces){
+  // casillas
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
-      ctx.fillStyle = ((r+c)%2===0)? COLORS.light : COLORS.dark;
-      ctx.fillRect(c*S, r*S, S, S);
+      ctx.fillStyle=((r+c)%2===0)?COL.A:COL.B;
+      ctx.fillRect(c*S,r*S,S,S);
     }
   }
-  const rows = fenPieces.split('/');
-  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
+  // resaltado último movimiento
+  if(lastFrom){ fillSquare(lastFrom, COL.HL1); }
+  if(lastTo){ fillSquare(lastTo, COL.HL2); }
+  // piezas
+  const rows=fenPieces.split('/');
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=`${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
   for(let r=0;r<8;r++){
     let f=0;
     for(const ch of rows[r]){
       if(/\d/.test(ch)){ f+=+ch; }
       else{
         const x=(f+0.5)*S, y=(r+0.5)*S;
-        ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#0f1b2e';
-        ctx.fillText(GLYPH[ch]||'', x, y);
+        ctx.fillStyle=/[PRNBQK]/.test(ch)?'#ffffff':'#0b1220';
+        ctx.fillText(GLYPH[ch]||'',x,y);
         f++;
       }
     }
   }
+  // overlay flecha
+  octx.clearRect(0,0,L,L);
+  if(bestArrow){ drawArrow(bestArrow.from, bestArrow.to); }
+}
+function fillSquare(algebraic,color){
+  const c=algebraic.charCodeAt(0)-97;            // a->0
+  const r=8-(+algebraic[1]);                     // 8->0
+  octx.fillStyle=color; octx.globalAlpha=0.65;
+  octx.fillRect(c*S,r*S,S,S); octx.globalAlpha=1;
+}
+function drawArrow(from,to){
+  const fC=from.charCodeAt(0)-97, fR=8-(+from[1]);
+  const tC=to.charCodeAt(0)-97,   tR=8-(+to[1]);
+  const x1=fC*S+S/2, y1=fR*S+S/2, x2=tC*S+S/2, y2=tR*S+S/2;
+  const ang=Math.atan2(y2-y1,x2-x1);
+  const head=16;
+  octx.strokeStyle=COL.AR; octx.lineWidth=8; octx.lineCap='round';
+  octx.beginPath(); octx.moveTo(x1,y1); octx.lineTo(x2,y2); octx.stroke();
+  octx.beginPath(); octx.moveTo(x2,y2);
+  octx.lineTo(x2-head*Math.cos(ang-0.4), y2-head*Math.sin(ang-0.4));
+  octx.lineTo(x2-head*Math.cos(ang+0.4), y2-head*Math.sin(ang+0.4));
+  octx.closePath(); octx.fillStyle=COL.AR; octx.fill();
 }
 
-/* ===================== Lógica PGN ===================== */
+/* ========== Lógica PGN y control de jugadas ========== */
 let game, frames=[], idx=0;
-function setStatus(msg, ok){ const s=document.getElementById('status'); s.textContent=msg; s.classList.toggle('ok',!!ok); }
+
+function setStatus(t,ok){ const s=document.getElementById('status'); s.textContent=t; s.classList.toggle('ok',!!ok); }
+
 function initGame(){
   if(typeof Chess!=='function'){ setStatus('No se pudo cargar chess.js.',false); return false; }
-  game = new Chess(); frames=[game.fen()]; idx=0; render(); return true;
+  game=new Chess(); frames=[game.fen()]; idx=0; lastFrom=lastTo=null; render(); return true;
 }
 function render(){
   const fenPieces=(frames[idx]||game.fen()).split(' ')[0];
   drawBoard(fenPieces);
-  setStatus(`Posición ${idx}/${Math.max(frames.length-1,0)}`, true);
+  setStatus(`Posición ${idx}/${Math.max(frames.length-1,0)}`,true);
   if(document.getElementById('autoAnalyze').checked) scheduleAutoAnalyze();
 }
+
 function normalizePGN(raw){
   if(!raw) return '';
   let p=raw.replace(/\r\n/g,'\n').replace(/^\uFEFF/,'').replace(/\u00A0/g,' ');
-  // Borra anotaciones tipo [%clk ...], [%eval ...] dentro de llaves para evitar ruido
-  p=p.replace(/\{\s*\[%.*?\]\s*\}/g,' ');
-  // Asegura línea en blanco entre encabezados y movidas si no existe
+  p=p.replace(/\{\s*\[%.*?\]\s*\}/g,' '); // limpia [%clk], [%eval], etc
   const lines=p.split('\n'); let i=0; while(i<lines.length && /^\s*\[.*\]\s*$/.test(lines[i])) i++;
   if(i>0 && i<lines.length && lines[i].trim()!=='' && lines[i-1].trim()!==''){ lines.splice(i,0,''); }
   return lines.join('\n').trim();
 }
+
 function loadPGN(pgn){
   pgn=normalizePGN(pgn);
-  const ok = game.load_pgn(pgn, {sloppy:true});
-  if(!ok){ alert('PGN inválido. Revisa formato/encabezados.'); return; }
+  const ok=game.load_pgn(pgn,{sloppy:true});
+  if(!ok){ alert('PGN inválido.'); return; }
   const san=game.history(); game.reset(); frames=[game.fen()];
-  for(const mv of san){ game.move(mv); frames.push(game.fen()); }
-  idx=0;
-  const pretty=[]; for(let i=0;i<san.length;i++){ pretty.push((i%2===0? `${Math.floor(i/2)+1}. `:'')+san[i]); }
-  document.getElementById('movesBox').textContent=pretty.join(' ');
+  for(const mv of san){ const m=game.move(mv); frames.push(game.fen()); }
+  idx=0; lastFrom=lastTo=null; bestArrow=null;
+  document.getElementById('movesBox').innerHTML=formatSANList(san);
   document.getElementById('gameInfo').textContent=`Movidas: ${san.length}`;
   render();
 }
 
-/* ===================== Controles ===================== */
-document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; render(); } };
-document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; render(); } };
-document.getElementById('resetBtn').onclick = ()=>{ idx=0; render(); };
-let timer=null;
+function formatSANList(san){
+  const out=[]; for(let i=0;i<san.length;i++){
+    const num=(i%2===0)? `<span class="mno">${Math.floor(i/2)+1}.</span> `:'';
+    out.push(num + sanToFigurine(san[i]));
+  }
+  return out.join(' ');
+}
+
+function sanToFigurine(s){
+  return s
+    .replace(/O-O-O/g,'0-0-0').replace(/O-O/g,'0-0')
+    .replace(/([KQRBN])/g, m => ({K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘'}[m]))
+    .replace(/x/g,'×');
+}
+
+/* controlar último movimiento para resaltado */
+function updateLastMove(){
+  const tmp=new Chess();
+  const san=game.history();
+  lastFrom=lastTo=null;
+  if(idx===0) return;
+  for(let i=0;i<idx;i++){
+    const mv=tmp.move(san[i],{sloppy:true});
+    if(i===idx-1 && mv){ lastFrom=mv.from; lastTo=mv.to; }
+  }
+}
+
+/* botones navegación */
+document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; updateLastMove(); render(); } };
+document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; updateLastMove(); render(); } };
+document.getElementById('resetBtn').onclick = ()=>{ idx=0; updateLastMove(); render(); };
+
+let playTimer=null;
 document.getElementById('playBtn').onclick = ()=>{
-  if(timer){ clearInterval(timer); timer=null; return; }
+  if(playTimer){ clearInterval(playTimer); playTimer=null; return; }
   const ms=Math.max(100,+document.getElementById('speed').value||800);
-  timer=setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); } else { clearInterval(timer); timer=null; } },ms);
+  playTimer=setInterval(()=>{
+    if(idx<frames.length-1){ idx++; updateLastMove(); render(); }
+    else { clearInterval(playTimer); playTimer=null; }
+  }, ms);
 };
 document.getElementById('autoAnalyze').onchange = ()=>{ if(document.getElementById('autoAnalyze').checked) scheduleAutoAnalyze(); };
+
+/* carga PGN */
 document.getElementById('loadFileBtn').onclick = async ()=>{
   const f=document.getElementById('file').files?.[0];
   if(!f){ alert('Selecciona un archivo .pgn'); return; }
-  try{ const txt=await f.text(); loadPGN(txt); }catch(e){ alert('No se pudo leer el archivo.'); }
+  try{ const txt=await f.text(); loadPGN(txt); }catch{ alert('No se pudo leer el archivo.'); }
 };
 document.getElementById('loadTextBtn').onclick = ()=>{ loadPGN(document.getElementById('pgnText').value); };
 document.getElementById('copyFenBtn').onclick = async ()=>{
-  const fen=frames[idx]||game.fen(); try{ await navigator.clipboard.writeText(fen); setStatus('FEN copiado.',true); }catch(e){ setStatus('No se pudo copiar.',false); }
+  const fen=frames[idx]||game.fen();
+  try{ await navigator.clipboard.writeText(fen); setStatus('FEN copiado.',true); }catch{ setStatus('No se pudo copiar.',false); }
 };
 
-/* ===================== Stockfish (mirrors + local opcional) ===================== */
-let engine=null, chosenURL=null, engineReady=false, autoTimer=null;
+/* ========== Stockfish (mirrors + local) ========== */
+let engine=null, chosenURL=null, autoTimer=null;
 const CANDIDATES=[
   'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.js',
   'https://cdn.jsdelivr.net/gh/niklasf/stockfish.js/stockfish.js',
@@ -213,8 +291,8 @@ function tryEngine(url){
     const code=`self.onerror=()=>{};try{importScripts('${url}')}catch(e){postMessage({t:'err'})}`;
     const blob=URL.createObjectURL(new Blob([code],{type:'application/javascript'}));
     let w; try{ w=new Worker(blob); }catch{ res(false); return; }
-    let ok=false; const t=setTimeout(()=>{ if(!ok){w.terminate();res(false);} },4000);
-    w.onmessage=e=>{ const s=(e.data&&e.data.data)||e.data||''; if(/uciok/.test(s)){ ok=true; clearTimeout(t); w.terminate(); res(true); } };
+    let ok=false; const t=setTimeout(()=>{ if(!ok){ w.terminate(); res(false);} },4000);
+    w.onmessage=e=>{ const s=(e.data&&e.data.data)||e.data||''; if(/uciok/.test(s)){ ok=true; clearTimeout(t); w.terminate(); res(true);} };
     w.postMessage('uci');
   });
 }
@@ -225,27 +303,65 @@ async function ensureEngine(){
   if(!chosenURL){ document.getElementById('evalBox').textContent='No se pudo cargar Stockfish (mirrors/local).'; return null; }
   const code=`self.onerror=()=>{};try{importScripts('${chosenURL}')}catch(e){postMessage({type:'sf-error',msg:String(e)})}`;
   const blob=URL.createObjectURL(new Blob([code],{type:'application/javascript'}));
-  try{ engine=new Worker(blob); }catch{ document.getElementById('evalBox').textContent='No se pudo crear Worker.'; return null; }
-  engine.onmessage=(e)=>{
-    const line=(typeof e.data==='string')?e.data:(e.data?.data||''); if(!line) return;
-    if(line.startsWith('info ')){
-      const depth=(line.match(/\bdepth\s+(\d+)/)||[])[1]||'—';
-      const cp=(line.match(/\bcp\s+(-?\d+)/)||[])[1]; const mate=(line.match(/\bmate\s+(-?\d+)/)||[])[1];
-      const pv=(line.match(/\bpv\s+(.+)/)||[])[1]||''; const evalTxt=mate?('#'+mate):(cp?(Number(cp)/100).toFixed(2):'—');
-      document.getElementById('evalBox').textContent=`Eval: ${evalTxt} | Profundidad: ${depth} | Mejor jugada: ${(pv.split(' ')[0]||'—')} (motor: ${chosenURL.includes('/engine/')?'local':'CDN'})`;
-      document.getElementById('pvBox').textContent=pv;
-    }
-    if(/uciok/.test(line)) engineReady=true;
-  };
+  engine=new Worker(blob);
+  engine.onmessage=(e)=>handleEngineMessage(e);
   engine.postMessage('uci');
   return engine;
+}
+function handleEngineMessage(e){
+  const line=(typeof e.data==='string')?e.data:(e.data?.data||'');
+  if(!line) return;
+  if(line.startsWith('info ')){
+    const depth=(line.match(/\bdepth\s+(\d+)/)||[])[1]||'—';
+    const cp=(line.match(/\bcp\s+(-?\d+)/)||[])[1];
+    const mate=(line.match(/\bmate\s+(-?\d+)/)||[])[1];
+    const pvStr=(line.match(/\bpv\s+(.+)/)||[])[1]||'';
+    const evalTxt = mate ? ('#'+mate) : (cp ? (Number(cp)/100).toFixed(2) : '—');
+    setEvalUI(evalTxt, depth);
+    if(pvStr){ const pvHtml=formatPV(pvStr); document.getElementById('pvBox').innerHTML=pvHtml; }
+  }
+}
+function setEvalUI(evalTxt, depth){
+  document.getElementById('evalBox').textContent=`Eval: ${evalTxt} | Profundidad: ${depth} | Motor: ${chosenURL.includes('/engine/')?'local':'CDN'}`;
+  // Mover la “thumb” en barra (mate -> extremos)
+  const thumb=document.getElementById('evalThumb');
+  let pos=50;
+  if(String(evalTxt).startsWith('#')) pos = (evalTxt.includes('-')? 95 : 5);
+  else if(!isNaN(evalTxt)) { const v=Math.max(-5,Math.min(5,Number(evalTxt))); pos = 50 - (v*50/5); }
+  thumb.style.top = `${pos}%`;
+}
+function formatPV(pv){
+  // best move para flecha
+  const tokens=pv.trim().split(/\s+/);
+  if(tokens[0] && /^[a-h][1-8][a-h][1-8]/.test(tokens[0])){
+    const uci=tokens[0]; bestArrow={from:uci.slice(0,2),to:uci.slice(2,4)}; render();
+  }
+  // convertir a SAN con figurines usando chess.js
+  const tmp=new Chess(frames[idx]||new Chess().fen());
+  const sanMoves=[];
+  for(const tk of tokens){
+    if(/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(tk)){ // uci
+      const m=uciToMove(tmp,tk); if(!m) break;
+      sanMoves.push(sanToFigurine(m.san)); tmp.move(m);
+    }else{ break; }
+  }
+  // agrupar con numeración
+  let out=[]; for(let i=0;i<sanMoves.length;i++){
+    const num=(i%2===0)? `<span class="mno">${Math.floor(i/2)+1}.</span> `:'';
+    out.push(num + sanMoves[i]);
+  }
+  return out.join(' ');
+}
+function uciToMove(chess,uci){
+  const from=uci.slice(0,2), to=uci.slice(2,4), promo=uci[4];
+  const legal=chess.moves({verbose:true});
+  return legal.find(m=>m.from===from && m.to===to && (!promo || m.promotion===promo));
 }
 function analyzePosition(){
   if(!engine) return;
   const depth=Math.max(6,Math.min(30,+document.getElementById('maxDepth').value||18));
   const multi=Math.max(1,Math.min(3,+document.getElementById('multipv').value||1));
   const fen=frames[idx]||game.fen();
-  document.getElementById('evalBox').textContent=`Motor: ${chosenURL? (chosenURL.includes('/engine/')?'local':'CDN'):'?'} | Analizando…`;
   document.getElementById('pvBox').textContent='Pensando…';
   engine.postMessage('stop');
   engine.postMessage('setoption name MultiPV value '+multi);
@@ -256,12 +372,14 @@ function analyzePosition(){
 }
 function scheduleAutoAnalyze(){
   clearTimeout(autoTimer);
-  autoTimer=setTimeout(async()=>{ const e=await ensureEngine(); if(e) analyzePosition(); }, 250);
+  autoTimer=setTimeout(async()=>{ const e=await ensureEngine(); if(e) analyzePosition(); }, 220);
 }
-document.getElementById('analyzeBtn').onclick = async ()=>{ const e=await ensureEngine(); if(e) analyzePosition(); };
-document.getElementById('stopBtn').onclick    = ()=>{ if(engine) engine.postMessage('stop'); };
 
-/* ===================== Inicio ===================== */
+/* botones motor */
+document.getElementById('analyzeBtn').onclick = async ()=>{ const e=await ensureEngine(); if(e) analyzePosition(); };
+document.getElementById('stopBtn').onclick = ()=>{ if(engine) engine.postMessage('stop'); };
+
+/* inicio */
 window.addEventListener('load', ()=>{ if(initGame()) render(); });
 </script>
 </body>
