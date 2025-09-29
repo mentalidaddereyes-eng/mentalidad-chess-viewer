@@ -19,7 +19,7 @@
   .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
 
   /* tablero canvas */
-  #canvasBox{width:100%;max-width:720px;margin:auto}
+  #canvasBox{width:100%;max-width:560px;margin:auto}
   canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent}
 
   /* controles */
@@ -46,7 +46,7 @@
     <!-- IZQUIERDA: tablero + controles -->
     <div class="panel">
       <div id="canvasBox">
-        <canvas id="board" width="720" height="720"></canvas>
+        <canvas id="board" width="560" height="560"></canvas>
       </div>
 
       <div class="row" style="margin-top:12px">
@@ -110,14 +110,14 @@
 /* ===================== Tablero en canvas (sin libs visuales) ===================== */
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
-const SIZE = 720, S = SIZE/8;
+const SIZE = canvas.width;               // 560
+const S = SIZE/8;
 const COLORS = { light:getCss('--square-a'), dark:getCss('--square-b') };
 const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
 
 function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
 function drawBoard(fenPieces){
-  // fondo casillas
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
       const light = (r+c)%2===0;
@@ -125,7 +125,6 @@ function drawBoard(fenPieces){
       ctx.fillRect(c*S, r*S, S, S);
     }
   }
-  // piezas unicode
   const rows = fenPieces.split('/');
   ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
   for(let r=0;r<8;r++){
@@ -158,7 +157,6 @@ function initGame(){
 }
 
 function render(){
-  // toma solo la parte de piezas de la FEN
   const fenPieces = (frames[idx]||game.fen()).split(' ')[0];
   drawBoard(fenPieces);
   document.getElementById('status').textContent = `Posición ${idx}/${frames.length-1}`;
@@ -167,9 +165,7 @@ function render(){
 function loadPGN(pgn){
   const ok = game.load_pgn(pgn, { sloppy:true });
   if(!ok){ alert('PGN inválido.'); return; }
-  const san = game.history();      // SAN principal
-  frames = ['startpos'];           // generaremos FEN por cada jugada
-  // reconstruir paso a paso
+  const san = game.history();
   game.reset();
   frames = [game.fen()];
   for(const mv of san){ game.move(mv); frames.push(game.fen()); }
@@ -207,44 +203,57 @@ document.getElementById('copyFenBtn').onclick = async ()=>{
   document.getElementById('status').textContent = 'FEN copiado.';
 };
 
-/* ===================== Stockfish con Worker-BLOB ===================== */
+/* ===================== Stockfish con Worker (WASM + fallback asm.js) ===================== */
 let engine=null;
 function ensureEngine(){
-  if(engine) return engine;
-  const STOCKFISH_URL = 'https://cdn.jsdelivr.net/npm/stockfish@16/stockfish.js';
+  if (engine) return engine;
+
+  const URL_WASM = 'https://cdn.jsdelivr.net/npm/stockfish@16.1.1/dist/stockfish.wasm.js';
+  const URL_ASM  = 'https://cdn.jsdelivr.net/npm/stockfish@16/stockfish.js';
+
   const code = `
-    self.onerror = function(){};
-    try { importScripts('${STOCKFISH_URL}'); }
-    catch(e){ postMessage({type:'sf-error', msg:String(e)}); }
-    // stockfish define onmessage interno; reenvío de mensajes no necesario.
+    (function(){
+      function load(u){
+        try { importScripts(u); }
+        catch(e){ postMessage({type:'sf-error',msg:String(e),url:u}); }
+      }
+      load('${URL_WASM}');
+      if (typeof self.STOCKFISH === 'undefined' && typeof onmessage !== 'function'){
+        load('${URL_ASM}');
+      }
+    })();
   `;
   const blob = new Blob([code], {type:'application/javascript'});
-  const url = URL.createObjectURL(blob);
+  const workerUrl = URL.createObjectURL(blob);
+
   try{
-    engine = new Worker(url);
+    engine = new Worker(workerUrl);
   }catch(e){
     alert('No se pudo crear el Worker de Stockfish.');
     engine = null;
     return null;
   }
+
   engine.onmessage = (e)=>{
-    if(e.data && e.data.type==='sf-error'){
-      document.getElementById('evalBox').textContent = 'Error cargando motor (CSP/red).';
+    if (e.data && e.data.type === 'sf-error'){
+      document.getElementById('evalBox').textContent = 'No se pudo cargar Stockfish ('+e.data.url+').';
       return;
     }
-    const line = (typeof e.data==='string') ? e.data : (e.data?.data||'');
-    if(!line) return;
-    if(line.startsWith('info ')){
+    const line = typeof e.data === 'string' ? e.data : (e.data?.data || '');
+    if (!line) return;
+
+    if (line.startsWith('info ')){
       const depth = (line.match(/\bdepth\s+(\d+)/)||[])[1] || '—';
       const cp    = (line.match(/\bcp\s+(-?\d+)/)||[])[1];
       const mate  = (line.match(/\bmate\s+(-?\d+)/)||[])[1];
       const pv    = (line.match(/\bpv\s+(.+)/)||[])[1] || '';
-      const evalTxt = mate ? ('#'+mate) : (cp? (Number(cp)/100).toFixed(2) : '—');
+      const evalTxt = mate ? ('#'+mate) : (cp ? (Number(cp)/100).toFixed(2) : '—');
       document.getElementById('evalBox').textContent =
         `Eval: ${evalTxt}  |  Profundidad: ${depth}  |  Mejor jugada: ${(pv.split(' ')[0]||'—')}`;
       document.getElementById('pvBox').textContent = pv;
     }
   };
+
   return engine;
 }
 
@@ -265,14 +274,7 @@ document.getElementById('analyzeBtn').onclick = ()=>{
 document.getElementById('stopBtn').onclick = ()=>{ if(engine) engine.postMessage('stop'); };
 
 /* ===================== Inicialización ===================== */
-window.addEventListener('load', ()=>{
-  if(initGame()){
-    // dibuja posición inicial
-    render();
-    // autollenar con PGN demo al pulsar "Cargar desde texto"
-    // (el usuario puede editar el textarea)
-  }
-});
+window.addEventListener('load', ()=>{ if(initGame()) render(); });
 </script>
 </body>
 </html>
