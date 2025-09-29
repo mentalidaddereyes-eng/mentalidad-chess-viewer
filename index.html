@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Visor PGN — sube tu partida + análisis</title>
+<title>Visor PGN — tablero interactivo + análisis</title>
 
 <style>
   :root{
     --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#a7b6c9;
     --sq-a:#e8f1e6; --sq-b:#6fb363;
+    --sel:#ffcc00aa; --dot:#00000066; --last:#ffe08a99;
     --btn:#223149; --btnbd:#364760; --btnh:#2e4970; --ok:#22c55e;
     --arrow1:#28d06e; --arrow2:#4aa3ff;
   }
@@ -33,30 +34,33 @@
   .box{background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
   .note{color:var(--muted);font-size:14px}
-  .ok{color:var(--ok)}
 
   .evalbar-wrap{height:14px;border-radius:8px;overflow:hidden;border:1px solid var(--borde);background:linear-gradient(90deg,#3d5a96 0%,#3d5a96 50%,#2d7a3e 50%,#2d7a3e 100%)}
   .evalbar-pointer{position:relative;height:100%}
   .evalbar-pointer::after{content:"";position:absolute;top:-3px;width:2px;height:20px;background:#fff;left:50%;box-shadow:0 0 4px #000a}
 </style>
 
+<!-- Reglas PGN/Jugadas -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
 </head>
 <body>
-  <h1>Visor PGN — sube tu partida + análisis</h1>
+  <h1>Visor PGN — tablero interactivo + análisis</h1>
 
   <div class="wrap grid">
+    <!-- Tablero + controles -->
     <div class="panel">
       <div id="canvasBox"><canvas id="board" width="720" height="720"></canvas></div>
+
       <div class="row" style="margin-top:12px">
         <button id="prevBtn" title="Anterior">←</button>
-        <button id="playBtn" class="primary" title="Play / Pausa">▶</button>
+        <button id="playBtn" class="primary" title="Play/Pausa">▶</button>
         <button id="nextBtn" title="Siguiente">→</button>
         <button id="resetBtn" title="Reiniciar">Reiniciar</button>
         <label style="margin-left:auto;display:flex;align-items:center;gap:6px">
           <input id="autoChk" type="checkbox" checked> Auto-analizar
         </label>
       </div>
+
       <div class="row" style="margin-top:8px">
         <label>Velocidad (ms) <input id="speed" type="number" value="800" min="120" step="40" style="width:110px"></label>
         <label>Profundidad
@@ -66,15 +70,17 @@
           <select id="linesSel"><option value="1">1</option><option value="2" selected>2</option></select>
         </label>
       </div>
-      <div class="note" id="status" style="margin-top:8px">OK: tablero dibujado.</div>
+
+      <div class="note" id="status" style="margin-top:8px">OK: tablero listo. Haz click en una pieza para moverla.</div>
     </div>
 
+    <!-- Carga PGN + análisis -->
     <div class="panel">
       <div class="row">
         <input id="file" type="file" accept=".pgn,.txt">
         <button id="loadFileBtn" class="primary">Cargar PGN</button>
       </div>
-      <div class="note" style="margin:8px 0 6px">O pega un PGN aquí:</div>
+      <div class="note" style="margin:8px 0 6px">O pega un PGN:</div>
       <textarea id="pgnText">[Event "Mini"]
 [Site "-"]
 [Date "2024.09.28"]
@@ -89,6 +95,7 @@
         <button id="loadTextBtn" class="primary">Cargar desde texto</button>
         <button id="copyFenBtn">Copiar FEN</button>
       </div>
+
       <div id="gameInfo" class="note" style="margin-top:10px">Sin partida cargada.</div>
       <div id="movesBox" class="box mono" style="margin-top:6px">Movidas aparecerán aquí…</div>
 
@@ -106,208 +113,272 @@
   </div>
 
 <script>
-/* ===== Canvas tablero ===== */
+/* ================== Canvas + dibujo ================== */
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d',{alpha:true});
-const SIZE = 720, S = SIZE/8;
-const COLORS = { light:getCss('--sq-a'), dark:getCss('--sq-b') };
+const SIZE = 720, S=SIZE/8;
+const COLORS = {light:getCss('--sq-a'), dark:getCss('--sq-b')};
 const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
-function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function getCss(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function sqToXY(sq){ const f=sq.charCodeAt(0)-97, r=8-Number(sq[1]); return {x:f*S,y:r*S}; }
+function xyToSq(x,y){ const f=Math.floor(x/S), r=Math.floor(y/S); if(f<0||f>7||r<0||r>7) return null; return String.fromCharCode(97+f)+(8-r); }
 
-function drawBoard(fenPieces, arrows=[]){
+function drawBoard(fenPieces, arrows=[], highlights={sel:null, moves:[], last:null}){
+  // casillas
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
-      const light = (r+c)%2===0;
-      ctx.fillStyle = light? COLORS.light : COLORS.dark;
-      ctx.fillRect(c*S, r*S, S, S);
+      ctx.fillStyle=((r+c)%2===0)?COLORS.light:COLORS.dark;
+      ctx.fillRect(c*S,r*S,S,S);
     }
   }
-  const rows = fenPieces.split('/');
-  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
+  // último movimiento (sombreado)
+  if(highlights.last){
+    ctx.fillStyle=getCss('--last');
+    [highlights.last.from, highlights.last.to].forEach(s=>{ if(!s) return; const p=sqToXY(s); ctx.fillRect(p.x,p.y,S,S); });
+  }
+  // piezas
+  const rows=fenPieces.split('/');
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=`${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
   for(let r=0;r<8;r++){
     let file=0;
     for(const ch of rows[r]){
-      if(/\d/.test(ch)){ file += +ch; }
-      else{
-        const x=(file+0.5)*S, y=(r+0.5)*S;
-        ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#0f0f0f';
-        ctx.fillText(GLYPH[ch]||'', x, y);
-        file++;
-      }
+      if(/\d/.test(ch)){ file+=+ch; continue; }
+      const x=(file+0.5)*S, y=(r+0.5)*S;
+      ctx.fillStyle=/[PRNBQK]/.test(ch)?'#ffffff':'#0f0f0f';
+      ctx.fillText(GLYPH[ch]||'',x,y);
+      file++;
     }
   }
-  arrows.forEach((a,i)=> drawArrow(a.from, a.to, i===0? getCss('--arrow1'): getCss('--arrow2')));
+  // selección
+  if(highlights.sel){
+    const {x,y}=sqToXY(highlights.sel);
+    ctx.fillStyle=getCss('--sel'); ctx.fillRect(x,y,S,S);
+  }
+  // destinos
+  ctx.fillStyle=getCss('--dot');
+  highlights.moves.forEach(s=>{ const p=sqToXY(s); ctx.beginPath(); ctx.arc(p.x+S/2,p.y+S/2,S*0.15,0,Math.PI*2); ctx.fill(); });
+
+  // flechas análisis
+  arrows.forEach((a,i)=>drawArrow(a.from,a.to,i===0?getCss('--arrow1'):getCss('--arrow2')));
 }
-function algebraicToXY(sq){ const f = sq.charCodeAt(0)-97, r=8-parseInt(sq[1],10); return {x:(f+0.5)*S, y:(r+0.5)*S}; }
 function drawArrow(from,to,color){
-  const A=algebraicToXY(from), B=algebraicToXY(to);
+  const A=centerOf(from), B=centerOf(to);
   ctx.strokeStyle=color; ctx.lineWidth=10; ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
   const ang=Math.atan2(B.y-A.y,B.x-A.x), L=18;
   ctx.beginPath(); ctx.moveTo(B.x,B.y);
-  ctx.lineTo(B.x-L*Math.cos(ang-0.5), B.y-L*Math.sin(ang-0.5));
+  ctx.lineTo(B.x-L*Math.cos(ang-0.5),B.y-L*Math.sin(ang-0.5));
   ctx.moveTo(B.x,B.y);
-  ctx.lineTo(B.x-L*Math.cos(ang+0.5), B.y-L*Math.sin(ang+0.5));
+  ctx.lineTo(B.x-L*Math.cos(ang+0.5),B.y-L*Math.sin(ang+0.5));
   ctx.stroke();
 }
+function centerOf(sq){ const p=sqToXY(sq); return {x:p.x+S/2,y:p.y+S/2}; }
 
-/* ===== Partida (chess.js) ===== */
-let game, frames=[], idx=0, lastArrows=[];
+/* ================== Lógica partida ================== */
+let game, frames=[], idx=0, lastArrows=[], lastMove=null;
+let selSq=null, selMoves=[];
 function initGame(){ if(typeof Chess!=='function'){ setStatus('No se pudo cargar chess.js.'); return false; } game=new Chess(); frames=[game.fen()]; idx=0; render(); return true; }
-function render(){ const fenPieces = (frames[idx]||game.fen()).split(' ')[0]; drawBoard(fenPieces,lastArrows); setStatus(`Posición ${idx}/${frames.length-1}`); }
-function setStatus(msg){ document.getElementById('status').textContent = msg; }
+function currentFenPieces(){ return (frames[idx]||game.fen()).split(' ')[0]; }
+function render(){ drawBoard(currentFenPieces(), lastArrows, {sel:selSq, moves:selMoves, last:lastMove}); setStatus(`Posición ${idx}/${frames.length-1}`); }
+function setStatus(msg){ document.getElementById('status').textContent=msg; }
+function updateListFromGame(){
+  const san=game.history(); document.getElementById('movesBox').textContent = san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
+  document.getElementById('gameInfo').textContent=`Movidas: ${san.length}`;
+}
 
-/* PGN robusto */
+/* ======= PGN robusto (igual que antes) ======= */
 function smartDecode(buf){
   let txt=new TextDecoder('utf-8',{fatal:false}).decode(buf);
-  // si hay muchos � intentamos latin1
-  if((txt.match(/\uFFFD/g)||[]).length>5){
-    try{ txt=new TextDecoder('windows-1252').decode(buf); }catch{}
-  }
+  if((txt.match(/\uFFFD/g)||[]).length>5){ try{ txt=new TextDecoder('windows-1252').decode(buf);}catch{} }
   return txt;
 }
-function splitFirstGame(txt){
-  // preferir por [Event
-  const parts=txt.split(/\n\s*\n(?=\[Event\b)/g);
-  if(parts.length>1) return parts[0];
-  return txt;
-}
+function splitFirstGame(txt){ const parts=txt.split(/\n\s*\n(?=\[Event\b)/g); return parts.length>1?parts[0]:txt; }
 function cleanPGN(txt){
-  return txt
-    .replace(/^\uFEFF/,'')            // BOM
-    .replace(/\r/g,'\n')              // normaliza EOL
-    .replace(/[\u2026]/g,'...')       // elipsis unicode
-    .replace(/\$[0-9]+/g,' ')         // NAGs $1
-    .replace(/\{[^}]*\}/g,' ')        // comentarios {...}
-    .replace(/\([^)]*\)/g,' ')        // variantes (...)
-    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g,' ') // limpia raros (deja ASCII imprimible)
-    .replace(/\s+/g,' ')
-    .trim();
+  return txt.replace(/^\uFEFF/,'').replace(/\r/g,'\n').replace(/[\u2026]/g,'...')
+            .replace(/\$[0-9]+/g,' ').replace(/\{[^}]*\}/g,' ').replace(/\([^)]*\)/g,' ')
+            .replace(/[^\x09\x0A\x0D\x20-\x7E]/g,' ').replace(/\s+/g,' ').trim();
 }
 function tryLoadPGN(raw){
-  const candidate = splitFirstGame(raw);
-  const cleaned = cleanPGN(candidate);
-  const ok = game.load_pgn(cleaned, {sloppy:true});
-  if(!ok){
-    setStatus('PGN inválido. Revisa que el archivo contenga una sola partida y movimientos válidos.');
-    document.getElementById('movesBox').textContent = cleaned.slice(0,200)+'…';
-  }
+  const candidate=splitFirstGame(raw); const cleaned=cleanPGN(candidate);
+  const ok=game.load_pgn(cleaned,{sloppy:true});
+  if(!ok){ setStatus('PGN inválido.'); document.getElementById('movesBox').textContent=cleaned.slice(0,200)+'…'; }
   return ok;
 }
-
 async function loadPGNFromFile(file){
-  try{
-    const buf = await file.arrayBuffer();
-    const txt = smartDecode(buf);
-    game.reset();
-    if(!tryLoadPGN(txt)) return;
-    afterLoaded();
-  }catch(e){
-    setStatus('Error leyendo el archivo PGN.');
-  }
+  try{ const buf=await file.arrayBuffer(); const txt=smartDecode(buf); game.reset(); if(!tryLoadPGN(txt)) return; afterLoaded(); }
+  catch{ setStatus('Error leyendo el archivo PGN.'); }
 }
-function loadPGNFromText(text){
-  game.reset();
-  if(!tryLoadPGN(text)) return;
-  afterLoaded();
-}
+function loadPGNFromText(text){ game.reset(); if(!tryLoadPGN(text)) return; afterLoaded(); }
 function afterLoaded(){
-  const san = game.history(); frames=[game.fen()]; game.reset(); frames=[game.fen()];
-  for(const mv of san){ game.move(mv); frames.push(game.fen()); }
-  idx=0;
-  document.getElementById('movesBox').textContent = san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
-  document.getElementById('gameInfo').textContent = `Movidas: ${san.length}`;
-  render();
-  if(autoOn()) triggerAnalyze();
+  const san=game.history(); frames=[game.fen()]; game.reset(); frames=[game.fen()];
+  for(const mv of san){ const m=game.move(mv); frames.push(game.fen()); lastMove={from:m.from,to:m.to}; }
+  idx=frames.length-1; selSq=null; selMoves=[]; lastArrows=[];
+  updateListFromGame(); render(); if(autoOn()) triggerAnalyze();
 }
 
-/* Controles */
-document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; render(); if(autoOn()) triggerAnalyze(); } };
-document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; render(); if(autoOn()) triggerAnalyze(); } };
-document.getElementById('resetBtn').onclick = ()=>{ idx=0; render(); if(autoOn()) triggerAnalyze(); };
+/* ================== Controles navegación ================== */
+document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; lastArrows=[]; render(); if(autoOn()) triggerAnalyze(); } };
+document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; lastArrows=[]; render(); if(autoOn()) triggerAnalyze(); } };
+document.getElementById('resetBtn').onclick = ()=>{ idx=0; lastArrows=[]; render(); if(autoOn()) triggerAnalyze(); };
 
 let timer=null;
 document.getElementById('playBtn').onclick = ()=>{
   if(timer){ clearInterval(timer); timer=null; return; }
-  const ms = Math.max(120, +document.getElementById('speed').value||800);
-  timer = setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); if(autoOn()) triggerAnalyze(); } else { clearInterval(timer); timer=null; } }, ms);
+  const ms=Math.max(120,+document.getElementById('speed').value||800);
+  timer=setInterval(()=>{ if(idx<frames.length-1){ idx++; lastArrows=[]; render(); if(autoOn()) triggerAnalyze(); } else { clearInterval(timer); timer=null; } }, ms);
 };
 
-document.getElementById('loadFileBtn').onclick = async ()=>{
-  const f = document.getElementById('file').files?.[0];
-  if(!f){ setStatus('Selecciona un archivo .pgn'); return; }
+/* ================== Cargar/copy ================== */
+document.getElementById('loadFileBtn').onclick=async()=>{
+  const f=document.getElementById('file').files?.[0]; if(!f){ setStatus('Selecciona un archivo .pgn'); return; }
   await loadPGNFromFile(f);
 };
-document.getElementById('loadTextBtn').onclick = ()=> loadPGNFromText(document.getElementById('pgnText').value);
-document.getElementById('copyFenBtn').onclick = async ()=>{ const fen = frames[idx] || game.fen(); await navigator.clipboard.writeText(fen); setStatus('FEN copiado.'); };
+document.getElementById('loadTextBtn').onclick=()=> loadPGNFromText(document.getElementById('pgnText').value);
+document.getElementById('copyFenBtn').onclick=async()=>{ const fen=frames[idx]||game.fen(); await navigator.clipboard.writeText(fen); setStatus('FEN copiado.'); };
 function autoOn(){ return document.getElementById('autoChk').checked; }
 
-/* ===== Stockfish (mirrors) ===== */
-let engine=null, analyzing=false, lastAnalyzeAt=0;
-const MIRRORS = [
+/* ================== Interacción: click-to-move ================== */
+function legalTargetsFrom(sq){
+  try{
+    // cargar posición actual en un Chess temporal
+    const ch=new Chess(); ch.load(frames[idx]||game.fen());
+    return ch.moves({square:sq, verbose:true}).map(m=>m.to);
+  }catch{ return []; }
+}
+function sideToMove(){ const fen=(frames[idx]||game.fen()); return fen.split(' ')[1]; }
+
+function selectSquare(sq){
+  // permitir seleccionar solo si hay pieza del lado al turno (por UX)
+  const ch=new Chess(); ch.load(frames[idx]||game.fen());
+  const piece=ch.get(sq); if(!piece || piece.color!==sideToMove()[0]){ selSq=null; selMoves=[]; render(); return; }
+  selSq=sq; selMoves=legalTargetsFrom(sq); render();
+}
+function tryMove(to){
+  if(!selSq) return;
+  const ch=new Chess(); ch.load(frames[idx]||game.fen());
+  // ¿promoción?
+  let moveObj={from:selSq,to};
+  const piece=ch.get(selSq);
+  const isPromotion = piece && piece.type==='p' && (to.endsWith('8')||to.endsWith('1'));
+  if(isPromotion){
+    const p=prompt('Promoción: q,r,b,n (Dama por defecto)','q')||'q';
+    moveObj.promotion = /[qrbn]/i.test(p)? p.toLowerCase() : 'q';
+  }
+  const move = ch.move(moveObj);
+  if(move){
+    frames=frames.slice(0,idx+1); // descartar futuras si estabas a mitad
+    frames.push(ch.fen());
+    idx=frames.length-1;
+    lastMove={from:move.from,to:move.to};
+    selSq=null; selMoves=[]; lastArrows=[];
+    // actualiza game principal también (para la lista)
+    game.load_pgn(game.pgn()||''); // mantener tags
+    const sanList=new Chess(); sanList.load(frames[0]); // dummy
+    // reconstruimos desde cero:
+    const rebuild=new Chess();
+    rebuild.load(frames[0]);
+    for(let i=1;i<frames.length;i++){
+      // no tenemos SAN guardado aquí; mejor regenerar desde history del ch temporal
+    }
+    // más simple: usa history del ch actual desde el inicio
+    const tmp=new Chess(); tmp.reset();
+    const movesSAN=[];
+    const replay=new Chess();
+    replay.reset();
+    const orig=new Chess(); orig.load(frames[0]); // startpos
+    // reconstruir SAN recorriendo frames: obtener jugada entre frame i-1 y i
+    let prev=new Chess(); prev.load(frames[0]);
+    for(let i=1;i<frames.length;i++){
+      const cur=new Chess(); cur.load(frames[i]);
+      const legal=prev.moves({verbose:true});
+      const played=legal.find(m=>{
+        const test=new Chess(); test.load(prev.fen()); test.move(m);
+        return test.fen()===cur.fen();
+      });
+      if(played){ movesSAN.push(played.san); prev=cur; }
+    }
+    document.getElementById('movesBox').textContent = movesSAN.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
+    document.getElementById('gameInfo').textContent=`Movidas: ${movesSAN.length}`;
+    render();
+    if(autoOn()) triggerAnalyze();
+  }else{
+    // movimiento ilegal -> solo limpia selección
+    selSq=null; selMoves=[]; render();
+  }
+}
+
+function onTap(ev){
+  const rect=canvas.getBoundingClientRect();
+  const x=(ev.clientX-rect.left)*canvas.width/rect.width;
+  const y=(ev.clientY-rect.top )*canvas.height/rect.height;
+  const sq=xyToSq(x,y); if(!sq) return;
+  if(!selSq){ selectSquare(sq); }
+  else if(sq===selSq){ selSq=null; selMoves=[]; render(); }
+  else { tryMove(sq); }
+}
+canvas.addEventListener('click', onTap);
+canvas.addEventListener('touchstart', e=>{ e.preventDefault(); const t=e.changedTouches[0]; onTap(t); }, {passive:false});
+
+/* ================== Stockfish (igual que antes) ================== */
+let engine=null, lastAnalyzeAt=0;
+const MIRRORS=[
   'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.js',
   'https://raw.githubusercontent.com/niklasf/stockfish.js/gh-pages/src/stockfish.js'
 ];
 function ensureEngine(){
   if(engine) return engine;
-  const code = `
-    self.onerror=function(){};
-    let ok=false; const urls=${JSON.stringify(MIRRORS)};
-    (async()=>{ for(const u of urls){ try{ importScripts(u); ok=true; postMessage({type:'_loaded',src:u}); break; }catch(e){} }
-      if(!ok) postMessage({type:'sf-error',msg:'Mirrors fallaron'}); })();
-  `;
-  engine = new Worker(URL.createObjectURL(new Blob([code],{type:'application/javascript'})));
-  engine.onmessage = onEngineMsg; return engine;
+  const code=`self.onerror=function(){};let ok=false;const urls=${JSON.stringify(MIRRORS)};(async()=>{for(const u of urls){try{importScripts(u);ok=true;postMessage({type:'_loaded',src:u});break}catch(e){}}if(!ok)postMessage({type:'sf-error',msg:'Mirrors fallaron'});})();`;
+  engine=new Worker(URL.createObjectURL(new Blob([code],{type:'application/javascript'})));
+  engine.onmessage = onEngineMsg;
+  return engine;
 }
-let latest = {depth:0, pv:{}};
-function resetLatest(){ latest={depth:0, pv:{}}; }
+let latest={depth:0,pv:{}};
+let analyzing=false;
+function resetLatest(){ latest={depth:0,pv:{}}; }
 function onEngineMsg(e){
-  const d = typeof e.data==='string'? e.data : e.data;
-  if(d && d.type==='sf-error'){ showEval('—','—','Motor no cargado'); document.getElementById('pvBox').textContent='No se pudo cargar Stockfish (mirrors).'; return; }
-  const line = typeof d==='string'? d : '';
+  const d=typeof e.data==='string'? e.data : e.data;
+  if(d && d.type==='sf-error'){ document.getElementById('pvBox').textContent='No se pudo cargar Stockfish (mirrors).'; return; }
+  const line=typeof d==='string'? d : '';
   if(!line) return;
   if(line.startsWith('info ')){
-    const depth = getNum(line, /\bdepth\s+(\d+)/); if(depth) latest.depth=Math.max(latest.depth,depth);
-    const multipv = getNum(line, /\bmultipv\s+(\d+)/) || 1;
-    const cp  = getNum(line, /\bcp\s+(-?\d+)/);
-    const mate= getNum(line, /\bmate\s+(-?\d+)/);
-    const pv  = (line.match(/\bpv\s+(.+)/)||[])[1] || '';
-    const score = (mate!=null)? {mate} : {cp};
+    const depth = getNum(line,/\bdepth\s+(\d+)/); if(depth) latest.depth=Math.max(latest.depth,depth);
+    const multipv=getNum(line,/\bmultipv\s+(\d+)/)||1;
+    const cp=getNum(line,/\bcp\s+(-?\d+)/); const mate=getNum(line,/\bmate\s+(-?\d+)/);
+    const pv=(line.match(/\bpv\s+(.+)/)||[])[1]||'';
+    const score=(mate!=null)?{mate}:{cp};
     if(pv){ latest.pv[multipv]={pv,score}; refreshEvalPanel(); }
   }
   if(line.startsWith('bestmove')) analyzing=false;
 }
-function getNum(s,re){ const m=s.match(re); return m? Number(m[1]): null; }
-
-function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+function getNum(s,re){ const m=s.match(re); return m?Number(m[1]):null; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function scoreToEvalText(sc){ if(sc.mate!=null) return '#'+sc.mate; if(sc.cp!=null) return (sc.cp/100).toFixed(2); return '—'; }
-function updateEvalBar(sc){ let cp = sc.mate!=null ? (sc.mate>0?1000:-1000) : (sc.cp??0);
-  const perc=(clamp(cp,-1000,1000)+1000)/2000; document.getElementById('evalPointer').style.left=(perc*100)+'%'; }
-function pvUciToSAN(fen, uci){ const ch=new Chess(); ch.load(fen); const ms=uci.trim().split(/\s+/); const san=[]; for(const u of ms){ const from=u.slice(0,2),to=u.slice(2,4),prom=u[4]; const m=ch.moves({verbose:true}).find(x=>x.from===from&&x.to===to&&(!prom||x.promotion===prom)); if(!m) break; san.push(m.san); ch.move(m);} return san.join(' '); }
-function firstMoveFromUci(uci){ const m=uci.trim().split(/\s+/)[0]||''; return {from:m.slice(0,2), to:m.slice(2,4)}; }
+function updateEvalBar(sc){ let cp=sc.mate!=null?(sc.mate>0?1000:-1000):(sc.cp??0); const p=(clamp(cp,-1000,1000)+1000)/2000; document.getElementById('evalPointer').style.left=(p*100)+'%'; }
+function pvUciToSAN(fen,uci){ const ch=new Chess(); ch.load(fen); const ms=uci.trim().split(/\s+/); const out=[]; for(const u of ms){ const from=u.slice(0,2),to=u.slice(2,4),prom=u[4]; const m=ch.moves({verbose:true}).find(x=>x.from===from&&x.to===to&&(!prom||x.promotion===prom)); if(!m) break; out.push(m.san); ch.move(m);} return out.join(' '); }
+function firstMoveFromUci(uci){ const m=uci.trim().split(/\s+/)[0]||''; return {from:m.slice(0,2),to:m.slice(2,4)}; }
 function refreshEvalPanel(){
   const pv1=latest.pv[1], pv2=latest.pv[2]; const fen=frames[idx]||game.fen(); let text='';
-  lastArrows=[]; if(pv1){ const san1=pvUciToSAN(fen,pv1.pv); text+=`① ${san1}\n`; updateEvalBar(pv1.score); showEval(scoreToEvalText(pv1.score),latest.depth,(san1.split(' ')[0]||'—')); const m1=firstMoveFromUci(pv1.pv); if(m1.from) lastArrows.push(m1); }
+  lastArrows=[];
+  if(pv1){ const san1=pvUciToSAN(fen,pv1.pv); text+=`① ${san1}\n`; updateEvalBar(pv1.score); showEval(scoreToEvalText(pv1.score),latest.depth,(san1.split(' ')[0]||'—')); const m1=firstMoveFromUci(pv1.pv); if(m1.from) lastArrows.push(m1); }
   if(pv2){ const san2=pvUciToSAN(fen,pv2.pv); text+=`② ${san2}\n`; const m2=firstMoveFromUci(pv2.pv); if(m2.from) lastArrows.push(m2); }
   document.getElementById('pvBox').textContent=text||'Pensando…'; render();
 }
 function showEval(ev,depth,best){ document.getElementById('evalBox').textContent=`Eval: ${ev} | Profundidad: ${depth||'—'} | Mejor jugada: ${best||'—'}`; }
-
 function triggerAnalyze(){
   const now=performance.now(); if(now-lastAnalyzeAt<800) return; lastAnalyzeAt=now;
   ensureEngine(); analyzing=true; resetLatest();
   const depth=+document.getElementById('depthSel').value||16;
-  const mpv  =+document.getElementById('linesSel').value||2;
-  const fen  =frames[idx]||game.fen();
+  const mpv=+document.getElementById('linesSel').value||2;
+  const fen=frames[idx]||game.fen();
   document.getElementById('pvBox').textContent='Pensando…';
   engine.postMessage('uci'); engine.postMessage('isready'); engine.postMessage('ucinewgame');
   engine.postMessage(`setoption name MultiPV value ${mpv}`);
   engine.postMessage(`position fen ${fen}`); engine.postMessage(`go depth ${depth}`);
 }
 document.getElementById('analyzeBtn').onclick=()=>triggerAnalyze();
-document.getElementById('stopBtn').onclick   =()=>{ if(engine) engine.postMessage('stop'); analyzing=false; };
+document.getElementById('stopBtn').onclick=()=>{ if(engine) engine.postMessage('stop'); analyzing=false; };
 
-/* ===== Init ===== */
+/* ================== Init ================== */
 window.addEventListener('load', ()=>{
   if(initGame()){
     render();
