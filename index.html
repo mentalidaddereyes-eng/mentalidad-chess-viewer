@@ -8,7 +8,7 @@
 <style>
   :root{
     --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#9fb0c3;
-    --square-a:#f0d9b5; --square-b:#b58863; --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a;
+    --square-a:#f0d9b5; --square-b:#b58863; --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a; --ok:#22c55e;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
@@ -18,7 +18,7 @@
   @media (max-width:980px){.grid{grid-template-columns:1fr}}
   .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
 
-  /* tablero canvas (responsive) */
+  /* tablero canvas */
   #canvasBox{width:100%;max-width:560px;margin:auto}
   canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent}
 
@@ -33,7 +33,7 @@
   .box{background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
   .note{color:var(--muted);font-size:14px}
-  .ok{color:#22c55e}
+  .ok{color:var(--ok)}
 </style>
 
 <!-- Reglas y PGN (chess.js) -->
@@ -46,7 +46,7 @@
     <!-- IZQUIERDA: tablero + controles -->
     <div class="panel">
       <div id="canvasBox">
-        <canvas id="board" width="560" height="560"></canvas>
+        <canvas id="board" width="560" height="560" aria-label="Tablero de ajedrez"></canvas>
       </div>
 
       <div class="row" style="margin-top:12px">
@@ -70,7 +70,7 @@
         <button id="loadFileBtn" class="primary">Cargar PGN</button>
       </div>
 
-      <div class="note" style="margin:8px 0 6px">O pega un PGN aquí y pulsa “Cargar desde texto”:</div>
+      <div class="note" style="margin:8px 0 6px">O pega un PGN aquí:</div>
       <textarea id="pgnText">[Event "Mini"]
 [Site "-"]
 [Date "2024.09.28"]
@@ -107,10 +107,10 @@
   </div>
 
 <script>
-/* ===================== Tablero en canvas ===================== */
+/* ===================== Tablero en canvas (sin libs visuales) ===================== */
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
-const SIZE = canvas.width;                       // 560
+const SIZE = canvas.width;        // 560
 const S = SIZE/8;
 const COLORS = { light:getCss('--square-a'), dark:getCss('--square-b') };
 const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
@@ -118,24 +118,25 @@ const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'
 function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
 function drawBoard(fenPieces){
-  // casillas
+  // fondo casillas
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
-      ctx.fillStyle = ((r+c)%2===0) ? COLORS.light : COLORS.dark;
+      const light = (r+c)%2===0;
+      ctx.fillStyle = light? COLORS.light : COLORS.dark;
       ctx.fillRect(c*S, r*S, S, S);
     }
   }
-  // piezas
+  // piezas unicode
   const rows = fenPieces.split('/');
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
   for(let r=0;r<8;r++){
     let file=0;
     for(const ch of rows[r]){
-      if(/\d/.test(ch)){ file += +ch; }
+      if(/\d/.test(ch)){ file += parseInt(ch,10); }
       else{
+        const x=(file+0.5)*S, y=(r+0.5)*S;
         ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#111111';
-        ctx.fillText(GLYPH[ch]||'', (file+0.5)*S, (r+0.5)*S);
+        ctx.fillText(GLYPH[ch]||'', x, y);
         file++;
       }
     }
@@ -147,7 +148,7 @@ let game, frames=[], idx=0;
 
 function initGame(){
   if(typeof Chess!=='function'){
-    status('No se pudo cargar chess.js (revisa conexión).', false);
+    setStatus('No se pudo cargar chess.js (reglas). Revisa tu conexión.');
     return false;
   }
   game = new Chess();
@@ -160,164 +161,191 @@ function initGame(){
 function render(){
   const fenPieces = (frames[idx]||game.fen()).split(' ')[0];
   drawBoard(fenPieces);
-  status(`Posición ${idx}/${Math.max(0,frames.length-1)}`, true);
+  setStatus(`Posición ${idx}/${Math.max(frames.length-1,0)}`);
 }
 
-function status(text, ok){ const el = document.getElementById('status'); el.textContent = text; el.className = 'note ' + (ok?'ok':''); }
+function setStatus(msg, isOk){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.classList.toggle('ok', !!isOk);
+}
 
 function loadPGN(pgn){
-  // tolerante
+  // Normaliza saltos de línea y elimina BOM invisibles
+  pgn = (pgn||'').replace(/\r\n/g,'\n').replace(/^\uFEFF/,'').trim();
+  if(!pgn){
+    alert('PGN vacío.');
+    return;
+  }
+  // Carga tolerante
   const ok = game.load_pgn(pgn, { sloppy:true });
-  if(!ok){ alert('PGN inválido. Revisa cabeceras y formato.'); return; }
+  if(!ok){ alert('PGN inválido. Revisa el formato.'); return; }
 
-  const san = game.history();
-  // reconstruir FEN por jugada
+  const san = game.history();      // SAN principal
+  // reconstruir paso a paso
   game.reset();
   frames = [game.fen()];
   for(const mv of san){ game.move(mv); frames.push(game.fen()); }
   idx = 0;
 
-  // UI
-  document.getElementById('movesBox').textContent =
-    san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
+  // Muestra SAN bonito con números de jugada
+  const pretty = [];
+  for(let i=0;i<san.length;i++){
+    if(i%2===0) pretty.push(`${Math.floor(i/2)+1}. ${san[i]}`);
+    else pretty.push(san[i]);
+  }
+  document.getElementById('movesBox').textContent = pretty.join(' ');
   document.getElementById('gameInfo').textContent = `Movidas: ${san.length}`;
   render();
 }
 
-/* ===================== Controles ===================== */
-const prevBtn  = document.getElementById('prevBtn');
-const nextBtn  = document.getElementById('nextBtn');
-const resetBtn = document.getElementById('resetBtn');
-const playBtn  = document.getElementById('playBtn');
-
-prevBtn.onclick  = ()=>{ if(idx>0){ idx--; render(); } };
-nextBtn.onclick  = ()=>{ if(idx<frames.length-1){ idx++; render(); } };
-resetBtn.onclick = ()=>{ idx=0; render(); };
+/* ===================== Controles reproducción ===================== */
+document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; render(); } };
+document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; render(); } };
+document.getElementById('resetBtn').onclick = ()=>{ idx=0; render(); };
 
 let timer=null;
-playBtn.onclick = ()=>{
-  if(timer){ clearInterval(timer); timer=null; playBtn.textContent='▶ Play'; return; }
+document.getElementById('playBtn').onclick = ()=>{
+  if(timer){ clearInterval(timer); timer=null; return; }
   const ms = Math.max(100, +document.getElementById('speed').value||800);
-  playBtn.textContent='⏸ Pausa';
-  timer = setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); } else { clearInterval(timer); timer=null; playBtn.textContent='▶ Play'; } }, ms);
+  timer = setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); } else { clearInterval(timer); timer=null; } }, ms);
 };
 
 /* ===================== Cargar PGN (archivo / texto) ===================== */
 document.getElementById('loadFileBtn').onclick = async ()=>{
   const f = document.getElementById('file').files?.[0];
   if(!f){ alert('Selecciona un archivo .pgn'); return; }
-  const txt = await f.text();
-  loadPGN(txt);
+  try{
+    const txt = await f.text();
+    loadPGN(txt);
+  }catch(e){
+    alert('No se pudo leer el archivo.');
+  }
 };
-// carga automática al seleccionar archivo
-document.getElementById('file').addEventListener('change', async (ev)=>{
-  const f = ev.target.files?.[0];
-  if (!f) return;
-  const txt = await f.text();
-  loadPGN(txt);
-});
-
-document.getElementById('loadTextBtn').onclick = ()=>{ loadPGN(document.getElementById('pgnText').value); };
+document.getElementById('loadTextBtn').onclick = ()=>{
+  loadPGN(document.getElementById('pgnText').value);
+};
 document.getElementById('copyFenBtn').onclick = async ()=>{
   const fen = frames[idx] || game.fen();
-  await navigator.clipboard.writeText(fen);
-  status('FEN copiado.', true);
+  try{
+    await navigator.clipboard.writeText(fen);
+    setStatus('FEN copiado.', true);
+  }catch(e){
+    setStatus('No se pudo copiar el FEN.');
+  }
 };
 
-/* ===================== Stockfish con mirrors ===================== */
-let engine = null;
-function ensureEngine(){
-  if (engine) return engine;
+/* ===================== Stockfish con Worker-BLOB y mirrors ===================== */
+let engine=null, engineReady=false;
 
-  const CANDIDATES = [
-    // WASM (rápido)
-    'https://cdn.jsdelivr.net/npm/stockfish@16.1.1/dist/stockfish.wasm.js',
-    'https://unpkg.com/stockfish@16.1.1/dist/stockfish.wasm.js',
-    'https://raw.githubusercontent.com/official-stockfish/Stockfish/refs/tags/sf_16.1.1/src/stockfish.wasm.js',
-    // ASM fallback
-    'https://cdn.jsdelivr.net/npm/stockfish@16/stockfish.js',
-    'https://unpkg.com/stockfish@16/stockfish.js',
-    'https://raw.githubusercontent.com/official-stockfish/Stockfish/refs/tags/sf_16/src/stockfish.js'
-  ];
+const STOCKFISH_CANDIDATES = [
+  // 1) CDNJS (recomendado y estable)
+  'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.js',
+  // 2) jsDelivr versión directa (por si falla el 1)
+  'https://cdn.jsdelivr.net/gh/niklasf/stockfish.js/stockfish.js',
+  // 3) LOCAL opcional: súbelo como /engine/stockfish.js (mismo repo/GitHub Pages)
+  location.origin + '/engine/stockfish.js'
+];
 
-  const loader = `
-    (function(){
-      const urls = ${JSON.stringify(CANDIDATES)};
-      function tryOne(i){
-        if(i>=urls.length){
-          postMessage({type:'sf-error', msg:'No sources worked'});
-          return;
-        }
-        try{
-          importScripts(urls[i]);
-          postMessage({type:'sf-loaded', url:urls[i]});
-        }catch(e){
-          postMessage({type:'sf-load-fail', url:urls[i], msg:String(e)});
-          tryOne(i+1);
-        }
+async function getFirstWorkingEngineURL(){
+  for(const url of STOCKFISH_CANDIDATES){
+    const ok = await tryCreateWorker(url);
+    if(ok) return url;
+  }
+  return null;
+}
+
+function tryCreateWorker(url){
+  return new Promise(resolve=>{
+    // Creamos un Worker desde un BLOB que hace importScripts(url)
+    const code = `
+      self.onerror = function(e){ postMessage({type:'sf-error', msg:String(e&&e.message||e)}); };
+      try { importScripts('${url}'); } catch(e){ postMessage({type:'sf-error', msg:String(e)}); }
+      // Stockfish (JS/ASM/WASM) se adjunta a self.onmessage; respondemos a un 'uci' con 'uciok'
+      // En la mayoría de builds, el engine ya define su onmessage y enviará 'uciok' al pedirlo.
+    `;
+    const blobURL = URL.createObjectURL(new Blob([code], {type:'application/javascript'}));
+    let w;
+    try{ w = new Worker(blobURL); }catch(e){ resolve(false); return; }
+
+    let settled = false;
+    const timer = setTimeout(()=>{ if(!settled){ settled=true; w.terminate(); resolve(false); } }, 4000);
+
+    w.onmessage = (e)=>{
+      const line = (typeof e.data==='string') ? e.data : (e.data?.data||'');
+      if(line && /uciok/.test(line)){
+        clearTimeout(timer); settled=true; w.terminate(); resolve(true);
       }
-      tryOne(0);
-    })();
-  `;
-  const blob = new Blob([loader], {type:'application/javascript'});
-  const url  = URL.createObjectURL(blob);
+    };
+    // Intenta pedir UCI para provocar 'uciok'
+    w.postMessage && w.postMessage('uci');
+  });
+}
 
+let chosenURL = null;
+
+async function ensureEngine(){
+  if(engine) return engine;
+  document.getElementById('evalBox').textContent = 'Cargando motor…';
+  chosenURL = await getFirstWorkingEngineURL();
+  if(!chosenURL){
+    document.getElementById('evalBox').textContent = 'No se pudo cargar Stockfish (todos los mirrors fallaron).';
+    return null;
+  }
+  const code = `
+    self.onerror = function(e){ postMessage({type:'sf-error', msg:String(e&&e.message||e)}); };
+    try { importScripts('${chosenURL}'); } catch(e){ postMessage({type:'sf-error', msg:String(e)}); }
+  `;
+  const url = URL.createObjectURL(new Blob([code], {type:'application/javascript'}));
   try{
     engine = new Worker(url);
   }catch(e){
-    alert('No se pudo crear el Worker de Stockfish.');
-    engine = null;
+    document.getElementById('evalBox').textContent = 'No se pudo crear el Worker del motor.';
     return null;
   }
-
   engine.onmessage = (e)=>{
-    const d = e.data;
-    if (d?.type === 'sf-load-fail'){ /* seguirá probando */ return; }
-    if (d?.type === 'sf-error'){
-      document.getElementById('evalBox').textContent = 'No se pudo cargar Stockfish (todos los mirrors fallaron).';
-      document.getElementById('pvBox').textContent   = '';
-      return;
-    }
-    if (d?.type === 'sf-loaded'){
-      document.getElementById('pvBox').textContent = 'Motor cargado desde: ' + d.url;
-      return;
-    }
-
-    const line = typeof d === 'string' ? d : (d?.data || '');
-    if (!line) return;
-    if (line.startsWith('info ')){
+    const line = (typeof e.data==='string') ? e.data : (e.data?.data||'');
+    if(!line) return;
+    if(line.startsWith('info ')){
       const depth = (line.match(/\bdepth\s+(\d+)/)||[])[1] || '—';
       const cp    = (line.match(/\bcp\s+(-?\d+)/)||[])[1];
       const mate  = (line.match(/\bmate\s+(-?\d+)/)||[])[1];
       const pv    = (line.match(/\bpv\s+(.+)/)||[])[1] || '';
-      const evalTxt = mate ? ('#'+mate) : (cp ? (Number(cp)/100).toFixed(2) : '—');
+      const evalTxt = mate ? ('#'+mate) : (cp? (Number(cp)/100).toFixed(2) : '—');
       document.getElementById('evalBox').textContent =
         `Eval: ${evalTxt}  |  Profundidad: ${depth}  |  Mejor jugada: ${(pv.split(' ')[0]||'—')}`;
       document.getElementById('pvBox').textContent = pv;
     }
+    if(/uciok/.test(line)){ engineReady = true; }
   };
-
+  // Inicializa
+  engine.postMessage('uci');
   return engine;
 }
 
-document.getElementById('analyzeBtn').onclick = ()=>{
-  if(!ensureEngine()) return;
+document.getElementById('analyzeBtn').onclick = async ()=>{
+  const e = await ensureEngine();
+  if(!e) return;
   const depth = Math.max(6, Math.min(30, +document.getElementById('maxDepth').value||18));
   const multi = Math.max(1, Math.min(3, +document.getElementById('multipv').value||1));
   const fen   = frames[idx] || game.fen();
-  document.getElementById('evalBox').textContent = 'Analizando…';
+  document.getElementById('evalBox').textContent = `Motor: ${chosenURL} | Analizando…`;
   document.getElementById('pvBox').textContent   = 'Pensando…';
-  engine.postMessage('uci');
-  engine.postMessage('setoption name MultiPV value '+multi);
-  engine.postMessage('isready');
-  engine.postMessage('ucinewgame');
-  engine.postMessage('position fen '+fen);
-  engine.postMessage('go depth '+depth);
+  e.postMessage('setoption name MultiPV value '+multi);
+  e.postMessage('isready');
+  e.postMessage('ucinewgame');
+  e.postMessage('position fen '+fen);
+  e.postMessage('go depth '+depth);
 };
 document.getElementById('stopBtn').onclick = ()=>{ if(engine) engine.postMessage('stop'); };
 
 /* ===================== Inicialización ===================== */
-window.addEventListener('load', ()=>{ initGame(); });
+window.addEventListener('load', ()=>{
+  if(initGame()){
+    render();
+    setStatus('OK: tablero dibujado.', true);
+  }
+});
 </script>
 </body>
 </html>
