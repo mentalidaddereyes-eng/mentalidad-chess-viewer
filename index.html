@@ -4,87 +4,107 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Visor PGN — sube tu partida + análisis</title>
+
 <style>
   :root{
-    --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#9fb0c3;
-    --sqA:#e9f5ea; --sqB:#6aa84f;         /* tablero verde/blanco */
-    --hl1:#ffec99; --hl2:#ffe066;         /* resaltado último movimiento */
-    --arrow:#ffd43b;                       /* flecha mejor jugada */
-    --btn:#24324a; --btnbd:#3b4a63; --btnh:#2f456a; --ok:#22c55e;
+    /* Tema */
+    --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#a7b6c9;
+    /* Tablero verde */
+    --sq-a:#e8f1e6; /* claro */
+    --sq-b:#6fb363; /* verde */
+    /* Botones */
+    --btn:#223149; --btnbd:#364760; --btnh:#2e4970; --ok:#22c55e;
+    /* Flechas */
+    --arrow1:#28d06e; /* mejor */
+    --arrow2:#4aa3ff; /* segunda */
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
-  h1{max-width:1180px;margin:18px auto 8px;padding:0 16px;font-size:26px}
-  .wrap{max-width:1180px;margin:0 auto;padding:16px}
-  .grid{display:grid;grid-template-columns:640px 1fr;gap:16px}
-  @media (max-width:1060px){.grid{grid-template-columns:1fr}}
+  h1{max-width:1120px;margin:18px auto 8px;padding:0 16px;font-size:26px}
+  .wrap{max-width:1120px;margin:0 auto;padding:16px}
+  .grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
+  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+
   .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
 
-  /* tablero con overlay para flechas */
-  .boardWrap{width:100%;max-width:640px;margin:auto;position:relative}
-  canvas#board{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:12px;background:transparent}
-  canvas#overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+  /* tablero */
+  #canvasBox{width:100%;max-width:720px;margin:auto}
+  canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent}
 
+  /* controles */
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   button{background:var(--btn);border:1px solid var(--btnbd);color:var(--txt);border-radius:10px;padding:10px 14px;cursor:pointer}
   button:hover{background:var(--btnh)}
   .primary{background:#2f7d4e;border-color:#2f7d4e}
-  input,textarea,label{font:inherit}
-  input[type="number"]{width:100px;background:#0b1627;border:1px solid var(--borde);border-radius:8px;padding:8px;color:var(--txt)}
+  input,textarea,select{font:inherit}
+  input[type="number"],select{background:#0b1627;border:1px solid var(--borde);border-radius:8px;padding:8px;color:var(--txt)}
   textarea{width:100%;min-height:220px;background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px;color:var(--txt);resize:vertical;white-space:pre-wrap}
   .box{background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
   .note{color:var(--muted);font-size:14px}
   .ok{color:var(--ok)}
-  .spacer{flex:1}
 
-  /* barra de evaluación */
-  .evalRow{display:flex;align-items:center;gap:10px;margin-top:8px}
-  .evalBar{position:relative;width:18px;height:220px;border-radius:9px;border:1px solid var(--borde);overflow:hidden;background:linear-gradient(#fff,#2b2b2b)}
-  .evalThumb{position:absolute;left:0;width:100%;height:4px;background:#5eead4;box-shadow:0 0 6px #5eead4}
-  .evalText{min-height:24px}
-  .pv{line-height:1.5}
-  .pv span.mno{color:#8fb3ff}
+  /* Barra evaluación */
+  .evalbar-wrap{height:14px;border-radius:8px;overflow:hidden;border:1px solid var(--borde);background:linear-gradient(90deg,#3d5a96 0%,#3d5a96 50%,#2d7a3e 50%,#2d7a3e 100%)}
+  .evalbar-pointer{position:relative;height:100%}
+  .evalbar-pointer::after{
+    content:""; position:absolute; top:-3px; width:2px; height:20px; background:#fff; left:50%;
+    box-shadow:0 0 4px #000a;
+  }
 </style>
 
+<!-- Reglas PGN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
 </head>
 <body>
-<h1>Visor PGN — sube tu partida + análisis</h1>
+  <h1>Visor PGN — sube tu partida + análisis</h1>
 
-<div class="wrap grid">
-  <!-- IZQUIERDA -->
-  <div class="panel">
-    <div class="boardWrap">
-      <canvas id="board" width="640" height="640" aria-label="Tablero"></canvas>
-      <canvas id="overlay" width="640" height="640"></canvas>
+  <div class="wrap grid">
+    <!-- IZQUIERDA: tablero + controles -->
+    <div class="panel">
+      <div id="canvasBox">
+        <canvas id="board" width="720" height="720"></canvas>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <button id="prevBtn" title="Anterior">←</button>
+        <button id="playBtn" class="primary" title="Play / Pausa">▶</button>
+        <button id="nextBtn" title="Siguiente">→</button>
+        <button id="resetBtn" title="Reiniciar">Reiniciar</button>
+        <label style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <input id="autoChk" type="checkbox" checked> Auto-analizar
+        </label>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <label>Velocidad (ms)
+          <input id="speed" type="number" value="800" min="120" step="40" style="width:110px">
+        </label>
+        <label>Profundidad
+          <select id="depthSel">
+            <option>12</option><option selected>16</option><option>18</option><option>20</option>
+          </select>
+        </label>
+        <label>Líneas
+          <select id="linesSel">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="note" id="status" style="margin-top:8px">OK: tablero dibujado.</div>
     </div>
 
-    <div class="row" style="margin-top:12px">
-      <button id="prevBtn">← Anterior</button>
-      <button id="playBtn" class="primary">▶ Play</button>
-      <button id="nextBtn">Siguiente →</button>
-      <button id="resetBtn">Reiniciar</button>
-    </div>
+    <!-- DERECHA: carga + análisis -->
+    <div class="panel">
+      <div class="row">
+        <input id="file" type="file" accept=".pgn,.txt">
+        <button id="loadFileBtn" class="primary">Cargar PGN</button>
+      </div>
 
-    <div class="row" style="margin-top:8px">
-      <label>Velocidad (ms) <input id="speed" type="number" value="800" min="100" step="50"></label>
-      <span class="spacer"></span>
-      <label><input id="autoAnalyze" type="checkbox"> Auto-analizar</label>
-    </div>
-
-    <div id="status" class="note ok" style="margin-top:8px">OK: tablero dibujado.</div>
-  </div>
-
-  <!-- DERECHA -->
-  <div class="panel">
-    <div class="row">
-      <input id="file" type="file" accept=".pgn,.txt">
-      <button id="loadFileBtn" class="primary">Cargar PGN</button>
-    </div>
-
-    <div class="note" style="margin:8px 0 6px">O pega un PGN aquí:</div>
-    <textarea id="pgnText">[Event "Mini"]
+      <div class="note" style="margin:8px 0 6px">O pega un PGN aquí:</div>
+      <textarea id="pgnText">[Event "Mini"]
 [Site "-"]
 [Date "2024.09.28"]
 [Round "-"]
@@ -93,294 +113,293 @@
 [Result "1-0"]
 
 1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0
-    </textarea>
+      </textarea>
 
-    <div class="row" style="margin-top:8px">
-      <button id="loadTextBtn" class="primary">Cargar desde texto</button>
-      <button id="copyFenBtn">Copiar FEN actual</button>
-    </div>
-
-    <div id="gameInfo" class="note" style="margin-top:10px">Sin partida cargada.</div>
-    <div id="movesBox" class="box mono" style="margin-top:6px">Movidas aparecerán aquí…</div>
-
-    <div class="note" style="margin-top:12px">Análisis con Stockfish</div>
-    <div class="row" style="margin-top:6px">
-      <button id="analyzeBtn" class="primary">Analizar posición</button>
-      <button id="stopBtn">Detener</button>
-    </div>
-
-    <div class="row" style="gap:16px;margin-top:8px">
-      <label>Profundidad máx: <input id="maxDepth" type="number" min="6" max="30" value="18"></label>
-      <label>N. líneas: <input id="multipv" type="number" min="1" max="3" value="1"></label>
-    </div>
-
-    <div class="evalRow">
-      <div class="evalBar"><div id="evalThumb" class="evalThumb" style="top:50%"></div></div>
-      <div class="spacer">
-        <div id="evalBox" class="box">Eval: — | Profundidad: — | Mejor jugada: —</div>
-        <div id="pvBox" class="box mono pv" style="margin-top:8px">Líneas de análisis aparecerán aquí…</div>
+      <div class="row" style="margin-top:8px">
+        <button id="loadTextBtn" class="primary">Cargar desde texto</button>
+        <button id="copyFenBtn">Copiar FEN</button>
       </div>
+
+      <div id="gameInfo" class="note" style="margin-top:10px">Sin partida cargada.</div>
+      <div id="movesBox" class="box mono" style="margin-top:6px">Movidas aparecerán aquí…</div>
+
+      <div class="note" style="margin-top:12px">Análisis Stockfish</div>
+      <div class="evalbar-wrap" title="Barra de evaluación (−10 … +10)">
+        <div id="evalPointer" class="evalbar-pointer" style="left:50%"></div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button id="analyzeBtn" class="primary">Analizar posición</button>
+        <button id="stopBtn">Detener</button>
+      </div>
+
+      <div class="box" id="evalBox" style="margin-top:8px">Eval: — | Profundidad: — | Mejor jugada: —</div>
+      <div class="box mono" id="pvBox" style="margin-top:8px">Líneas aparecerán aquí…</div>
     </div>
   </div>
-</div>
 
 <script>
-/* ========== Config tablero y dibujo ========== */
-const b = document.getElementById('board');
-const ctx = b.getContext('2d');
-const ov = document.getElementById('overlay');
-const octx = ov.getContext('2d');
-const L = b.width, S = L/8;
-const COL = {A:getCss('--sqA'), B:getCss('--sqB'), HL1:getCss('--hl1'), HL2:getCss('--hl2'), AR:getCss('--arrow')};
-const GLYPH={'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
-function getCss(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+/* ===================== Tablero (canvas) ===================== */
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d',{alpha:true});
+const SIZE = 720, S = SIZE/8;
+const COLORS = { light:getCss('--sq-a'), dark:getCss('--sq-b') };
+const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
 
-let lastFrom=null,lastTo=null,bestArrow=null;
+function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
-function drawBoard(fenPieces){
+function drawBoard(fenPieces, arrows=[]){
   // casillas
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
-      ctx.fillStyle=((r+c)%2===0)?COL.A:COL.B;
-      ctx.fillRect(c*S,r*S,S,S);
+      const light = (r+c)%2===0;
+      ctx.fillStyle = light? COLORS.light : COLORS.dark;
+      ctx.fillRect(c*S, r*S, S, S);
     }
   }
-  // resaltado último movimiento
-  if(lastFrom){ fillSquare(lastFrom, COL.HL1); }
-  if(lastTo){ fillSquare(lastTo, COL.HL2); }
   // piezas
-  const rows=fenPieces.split('/');
-  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=`${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
+  const rows = fenPieces.split('/');
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
   for(let r=0;r<8;r++){
-    let f=0;
+    let file=0;
     for(const ch of rows[r]){
-      if(/\d/.test(ch)){ f+=+ch; }
+      if(/\d/.test(ch)){ file += +ch; }
       else{
-        const x=(f+0.5)*S, y=(r+0.5)*S;
-        ctx.fillStyle=/[PRNBQK]/.test(ch)?'#ffffff':'#0b1220';
-        ctx.fillText(GLYPH[ch]||'',x,y);
-        f++;
+        const x=(file+0.5)*S, y=(r+0.5)*S;
+        ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#0f0f0f';
+        ctx.strokeStyle = '#00000020'; ctx.lineWidth = 2; // pequeño contorno
+        ctx.fillText(GLYPH[ch]||'', x, y);
+        file++;
       }
     }
   }
-  // overlay flecha
-  octx.clearRect(0,0,L,L);
-  if(bestArrow){ drawArrow(bestArrow.from, bestArrow.to); }
-}
-function fillSquare(algebraic,color){
-  const c=algebraic.charCodeAt(0)-97;            // a->0
-  const r=8-(+algebraic[1]);                     // 8->0
-  octx.fillStyle=color; octx.globalAlpha=0.65;
-  octx.fillRect(c*S,r*S,S,S); octx.globalAlpha=1;
-}
-function drawArrow(from,to){
-  const fC=from.charCodeAt(0)-97, fR=8-(+from[1]);
-  const tC=to.charCodeAt(0)-97,   tR=8-(+to[1]);
-  const x1=fC*S+S/2, y1=fR*S+S/2, x2=tC*S+S/2, y2=tR*S+S/2;
-  const ang=Math.atan2(y2-y1,x2-x1);
-  const head=16;
-  octx.strokeStyle=COL.AR; octx.lineWidth=8; octx.lineCap='round';
-  octx.beginPath(); octx.moveTo(x1,y1); octx.lineTo(x2,y2); octx.stroke();
-  octx.beginPath(); octx.moveTo(x2,y2);
-  octx.lineTo(x2-head*Math.cos(ang-0.4), y2-head*Math.sin(ang-0.4));
-  octx.lineTo(x2-head*Math.cos(ang+0.4), y2-head*Math.sin(ang+0.4));
-  octx.closePath(); octx.fillStyle=COL.AR; octx.fill();
+  // flechas (hasta 2)
+  arrows.forEach((a,i)=> drawArrow(a.from, a.to, i===0? getCss('--arrow1'): getCss('--arrow2')));
 }
 
-/* ========== Lógica PGN y control de jugadas ========== */
-let game, frames=[], idx=0;
+function algebraicToXY(sq){ // 'e4' -> {x,y} en px (centro)
+  const file = sq.charCodeAt(0) - 97;
+  const rank = 8 - parseInt(sq[1],10);
+  return { x:(file+0.5)*S, y:(rank+0.5)*S };
+}
+function drawArrow(from, to, color){
+  const A = algebraicToXY(from), B = algebraicToXY(to);
+  ctx.strokeStyle = color; ctx.lineWidth = 10; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+  // cabeza
+  const ang = Math.atan2(B.y-A.y, B.x-A.x);
+  const L = 18;
+  ctx.beginPath();
+  ctx.moveTo(B.x, B.y);
+  ctx.lineTo(B.x - L*Math.cos(ang-0.5), B.y - L*Math.sin(ang-0.5));
+  ctx.moveTo(B.x, B.y);
+  ctx.lineTo(B.x - L*Math.cos(ang+0.5), B.y - L*Math.sin(ang+0.5));
+  ctx.stroke();
+}
 
-function setStatus(t,ok){ const s=document.getElementById('status'); s.textContent=t; s.classList.toggle('ok',!!ok); }
-
+/* ===================== Lógica de partida (chess.js) ===================== */
+let game, frames=[], idx=0, lastArrows=[];
 function initGame(){
-  if(typeof Chess!=='function'){ setStatus('No se pudo cargar chess.js.',false); return false; }
-  game=new Chess(); frames=[game.fen()]; idx=0; lastFrom=lastTo=null; render(); return true;
+  if(typeof Chess!=='function'){
+    setStatus('No se pudo cargar chess.js.'); return false;
+  }
+  game = new Chess(); frames=[game.fen()]; idx=0; render(); return true;
 }
 function render(){
-  const fenPieces=(frames[idx]||game.fen()).split(' ')[0];
-  drawBoard(fenPieces);
-  setStatus(`Posición ${idx}/${Math.max(frames.length-1,0)}`,true);
-  if(document.getElementById('autoAnalyze').checked) scheduleAutoAnalyze();
+  const fenPieces = (frames[idx]||game.fen()).split(' ')[0];
+  drawBoard(fenPieces, lastArrows);
+  setStatus(`Posición ${idx}/${frames.length-1}`);
 }
+function setStatus(msg){ document.getElementById('status').textContent = msg; }
 
-function normalizePGN(raw){
-  if(!raw) return '';
-  let p=raw.replace(/\r\n/g,'\n').replace(/^\uFEFF/,'').replace(/\u00A0/g,' ');
-  p=p.replace(/\{\s*\[%.*?\]\s*\}/g,' '); // limpia [%clk], [%eval], etc
-  const lines=p.split('\n'); let i=0; while(i<lines.length && /^\s*\[.*\]\s*$/.test(lines[i])) i++;
-  if(i>0 && i<lines.length && lines[i].trim()!=='' && lines[i-1].trim()!==''){ lines.splice(i,0,''); }
-  return lines.join('\n').trim();
+function cleanPGN(txt){
+  return txt
+    .replace(/\{[^}]*\}/g,' ')        // comentarios {...}
+    .replace(/\([^)]*\)/g,' ')        // variantes (...)
+    .replace(/\[[^\]]*\]/g, (m)=>m)   // headers ok
+    .replace(/;.*$/gm,' ')            // comentarios ;
+    .replace(/\s+/g,' ')
+    .trim();
 }
-
 function loadPGN(pgn){
-  pgn=normalizePGN(pgn);
-  const ok=game.load_pgn(pgn,{sloppy:true});
+  const ok = game.load_pgn(cleanPGN(pgn), { sloppy:true });
   if(!ok){ alert('PGN inválido.'); return; }
-  const san=game.history(); game.reset(); frames=[game.fen()];
-  for(const mv of san){ const m=game.move(mv); frames.push(game.fen()); }
-  idx=0; lastFrom=lastTo=null; bestArrow=null;
-  document.getElementById('movesBox').innerHTML=formatSANList(san);
-  document.getElementById('gameInfo').textContent=`Movidas: ${san.length}`;
+  const san = game.history(); // SAN principal
+  frames = [game.fen()]; game.reset(); frames=[game.fen()];
+  for(const mv of san){ game.move(mv); frames.push(game.fen()); }
+  idx=0;
+  document.getElementById('movesBox').textContent =
+    san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
+  document.getElementById('gameInfo').textContent = `Movidas: ${san.length}`;
   render();
+  if(document.getElementById('autoChk').checked) triggerAnalyze();
 }
 
-function formatSANList(san){
-  const out=[]; for(let i=0;i<san.length;i++){
-    const num=(i%2===0)? `<span class="mno">${Math.floor(i/2)+1}.</span> `:'';
-    out.push(num + sanToFigurine(san[i]));
-  }
-  return out.join(' ');
-}
+/* Controles */
+document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; render(); if(autoOn()) triggerAnalyze(); } };
+document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; render(); if(autoOn()) triggerAnalyze(); } };
+document.getElementById('resetBtn').onclick = ()=>{ idx=0; render(); if(autoOn()) triggerAnalyze(); };
 
-function sanToFigurine(s){
-  return s
-    .replace(/O-O-O/g,'0-0-0').replace(/O-O/g,'0-0')
-    .replace(/([KQRBN])/g, m => ({K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘'}[m]))
-    .replace(/x/g,'×');
-}
-
-/* controlar último movimiento para resaltado */
-function updateLastMove(){
-  const tmp=new Chess();
-  const san=game.history();
-  lastFrom=lastTo=null;
-  if(idx===0) return;
-  for(let i=0;i<idx;i++){
-    const mv=tmp.move(san[i],{sloppy:true});
-    if(i===idx-1 && mv){ lastFrom=mv.from; lastTo=mv.to; }
-  }
-}
-
-/* botones navegación */
-document.getElementById('prevBtn').onclick = ()=>{ if(idx>0){ idx--; updateLastMove(); render(); } };
-document.getElementById('nextBtn').onclick = ()=>{ if(idx<frames.length-1){ idx++; updateLastMove(); render(); } };
-document.getElementById('resetBtn').onclick = ()=>{ idx=0; updateLastMove(); render(); };
-
-let playTimer=null;
+let timer=null;
 document.getElementById('playBtn').onclick = ()=>{
-  if(playTimer){ clearInterval(playTimer); playTimer=null; return; }
-  const ms=Math.max(100,+document.getElementById('speed').value||800);
-  playTimer=setInterval(()=>{
-    if(idx<frames.length-1){ idx++; updateLastMove(); render(); }
-    else { clearInterval(playTimer); playTimer=null; }
-  }, ms);
+  if(timer){ clearInterval(timer); timer=null; return; }
+  const ms = Math.max(120, +document.getElementById('speed').value||800);
+  timer = setInterval(()=>{ if(idx<frames.length-1){ idx++; render(); if(autoOn()) triggerAnalyze(); } else { clearInterval(timer); timer=null; } }, ms);
 };
-document.getElementById('autoAnalyze').onchange = ()=>{ if(document.getElementById('autoAnalyze').checked) scheduleAutoAnalyze(); };
 
-/* carga PGN */
 document.getElementById('loadFileBtn').onclick = async ()=>{
-  const f=document.getElementById('file').files?.[0];
+  const f = document.getElementById('file').files?.[0];
   if(!f){ alert('Selecciona un archivo .pgn'); return; }
-  try{ const txt=await f.text(); loadPGN(txt); }catch{ alert('No se pudo leer el archivo.'); }
+  loadPGN(await f.text());
 };
-document.getElementById('loadTextBtn').onclick = ()=>{ loadPGN(document.getElementById('pgnText').value); };
+document.getElementById('loadTextBtn').onclick = ()=> loadPGN(document.getElementById('pgnText').value);
 document.getElementById('copyFenBtn').onclick = async ()=>{
-  const fen=frames[idx]||game.fen();
-  try{ await navigator.clipboard.writeText(fen); setStatus('FEN copiado.',true); }catch{ setStatus('No se pudo copiar.',false); }
+  const fen = frames[idx] || game.fen(); await navigator.clipboard.writeText(fen); setStatus('FEN copiado.');
 };
+function autoOn(){ return document.getElementById('autoChk').checked; }
 
-/* ========== Stockfish (mirrors + local) ========== */
-let engine=null, chosenURL=null, autoTimer=null;
-const CANDIDATES=[
+/* ===================== Stockfish (Worker con mirrors) ===================== */
+let engine=null, engineReady=false, analyzing=false, lastAnalyzeAt=0;
+const MIRRORS = [
   'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.js',
-  'https://cdn.jsdelivr.net/gh/niklasf/stockfish.js/stockfish.js',
-  location.origin + '/engine/stockfish.js'
+  'https://raw.githubusercontent.com/niklasf/stockfish.js/gh-pages/src/stockfish.js'
 ];
-function tryEngine(url){
-  return new Promise(res=>{
-    const code=`self.onerror=()=>{};try{importScripts('${url}')}catch(e){postMessage({t:'err'})}`;
-    const blob=URL.createObjectURL(new Blob([code],{type:'application/javascript'}));
-    let w; try{ w=new Worker(blob); }catch{ res(false); return; }
-    let ok=false; const t=setTimeout(()=>{ if(!ok){ w.terminate(); res(false);} },4000);
-    w.onmessage=e=>{ const s=(e.data&&e.data.data)||e.data||''; if(/uciok/.test(s)){ ok=true; clearTimeout(t); w.terminate(); res(true);} };
-    w.postMessage('uci');
-  });
-}
-async function ensureEngine(){
+function ensureEngine(){
   if(engine) return engine;
-  document.getElementById('evalBox').textContent='Cargando motor…';
-  for(const url of CANDIDATES){ if(await tryEngine(url)){ chosenURL=url; break; } }
-  if(!chosenURL){ document.getElementById('evalBox').textContent='No se pudo cargar Stockfish (mirrors/local).'; return null; }
-  const code=`self.onerror=()=>{};try{importScripts('${chosenURL}')}catch(e){postMessage({type:'sf-error',msg:String(e)})}`;
-  const blob=URL.createObjectURL(new Blob([code],{type:'application/javascript'}));
-  engine=new Worker(blob);
-  engine.onmessage=(e)=>handleEngineMessage(e);
-  engine.postMessage('uci');
+  const code = `
+    self.onerror=function(){};
+    let ok=false;
+    const urls=${JSON.stringify(MIRRORS)};
+    (async()=>{
+      for(const u of urls){
+        try{ importScripts(u); ok=true; postMessage({type:'_loaded',src:u}); break; }catch(e){}
+      }
+      if(!ok) postMessage({type:'sf-error',msg:'Mirrors fallaron'});
+    })();
+  `;
+  const blob = new Blob([code], {type:'application/javascript'});
+  engine = new Worker(URL.createObjectURL(blob));
+  engine.onmessage = onEngineMsg;
   return engine;
 }
-function handleEngineMessage(e){
-  const line=(typeof e.data==='string')?e.data:(e.data?.data||'');
+function onEngineMsg(e){
+  const d = typeof e.data==='string' ? e.data : e.data;
+  if(d && d.type==='sf-error'){ showEval('—','—','No se pudo cargar Stockfish (mirrors).'); return; }
+  if(d && d.type==='_loaded'){ /* listo para UCI cuando analicemos */ return; }
+  const line = typeof d==='string'? d : '';
   if(!line) return;
+
+  // Parseo UCI
   if(line.startsWith('info ')){
-    const depth=(line.match(/\bdepth\s+(\d+)/)||[])[1]||'—';
-    const cp=(line.match(/\bcp\s+(-?\d+)/)||[])[1];
-    const mate=(line.match(/\bmate\s+(-?\d+)/)||[])[1];
-    const pvStr=(line.match(/\bpv\s+(.+)/)||[])[1]||'';
-    const evalTxt = mate ? ('#'+mate) : (cp ? (Number(cp)/100).toFixed(2) : '—');
-    setEvalUI(evalTxt, depth);
-    if(pvStr){ const pvHtml=formatPV(pvStr); document.getElementById('pvBox').innerHTML=pvHtml; }
+    const depth = getNum(line, /\bdepth\s+(\d+)/);
+    const multipv = getNum(line, /\bmultipv\s+(\d+)/) || 1;
+    const cp  = getNum(line, /\bcp\s+(-?\d+)/);
+    const mate= getNum(line, /\bmate\s+(-?\d+)/);
+    const pv  = (line.match(/\bpv\s+(.+)/)||[])[1] || '';
+
+    if(depth) latest.depth = Math.max(latest.depth, depth);
+    const score = (mate!=null)? {mate} : {cp};
+    if(pv){
+      latest.pv[multipv] = { pv, score };
+      refreshEvalPanel();
+    }
   }
+  if(line.startsWith('bestmove')){ analyzing=false; }
 }
-function setEvalUI(evalTxt, depth){
-  document.getElementById('evalBox').textContent=`Eval: ${evalTxt} | Profundidad: ${depth} | Motor: ${chosenURL.includes('/engine/')?'local':'CDN'}`;
-  // Mover la “thumb” en barra (mate -> extremos)
-  const thumb=document.getElementById('evalThumb');
-  let pos=50;
-  if(String(evalTxt).startsWith('#')) pos = (evalTxt.includes('-')? 95 : 5);
-  else if(!isNaN(evalTxt)) { const v=Math.max(-5,Math.min(5,Number(evalTxt))); pos = 50 - (v*50/5); }
-  thumb.style.top = `${pos}%`;
+function getNum(s,re){ const m = s.match(re); return m? Number(m[1]): null; }
+
+let latest = { depth:0, pv:{} };
+function resetLatest(){ latest={depth:0, pv:{}}; }
+
+/* Barra evaluación y PV SAN */
+function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+function scoreToEvalText(sc){
+  if(sc.mate!=null) return '#'+sc.mate;
+  if(sc.cp!=null) return (sc.cp/100).toFixed(2);
+  return '—';
 }
-function formatPV(pv){
-  // best move para flecha
-  const tokens=pv.trim().split(/\s+/);
-  if(tokens[0] && /^[a-h][1-8][a-h][1-8]/.test(tokens[0])){
-    const uci=tokens[0]; bestArrow={from:uci.slice(0,2),to:uci.slice(2,4)}; render();
+function updateEvalBar(sc){
+  // cp [-1000..1000] ≈ [-10..10]
+  let cp = sc.mate!=null ? (sc.mate>0? 1000 : -1000) : (sc.cp??0);
+  const perc = (clamp(cp,-1000,1000)+1000)/2000; // 0..1
+  const ptr = document.getElementById('evalPointer');
+  ptr.style.left = (perc*100)+'%';
+}
+function pvUciToSAN(fen, uciLine){
+  const ch = new Chess(); ch.load(fen);
+  const moves = uciLine.trim().split(/\s+/);
+  const sanList = [];
+  for(const u of moves){
+    const from=u.slice(0,2), to=u.slice(2,4), prom=u[4];
+    const legal = ch.moves({ verbose:true }).find(m=> m.from===from && m.to===to && (!prom || m.promotion===prom));
+    if(!legal) break;
+    sanList.push(legal.san);
+    ch.move(legal);
   }
-  // convertir a SAN con figurines usando chess.js
-  const tmp=new Chess(frames[idx]||new Chess().fen());
-  const sanMoves=[];
-  for(const tk of tokens){
-    if(/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(tk)){ // uci
-      const m=uciToMove(tmp,tk); if(!m) break;
-      sanMoves.push(sanToFigurine(m.san)); tmp.move(m);
-    }else{ break; }
-  }
-  // agrupar con numeración
-  let out=[]; for(let i=0;i<sanMoves.length;i++){
-    const num=(i%2===0)? `<span class="mno">${Math.floor(i/2)+1}.</span> `:'';
-    out.push(num + sanMoves[i]);
-  }
-  return out.join(' ');
+  return sanList.join(' ');
 }
-function uciToMove(chess,uci){
-  const from=uci.slice(0,2), to=uci.slice(2,4), promo=uci[4];
-  const legal=chess.moves({verbose:true});
-  return legal.find(m=>m.from===from && m.to===to && (!promo || m.promotion===promo));
+function firstMoveFromUci(uci){
+  const m = uci.trim().split(/\s+/)[0]||''; return {from:m.slice(0,2), to:m.slice(2,4)};
 }
-function analyzePosition(){
-  if(!engine) return;
-  const depth=Math.max(6,Math.min(30,+document.getElementById('maxDepth').value||18));
-  const multi=Math.max(1,Math.min(3,+document.getElementById('multipv').value||1));
-  const fen=frames[idx]||game.fen();
-  document.getElementById('pvBox').textContent='Pensando…';
-  engine.postMessage('stop');
-  engine.postMessage('setoption name MultiPV value '+multi);
+function refreshEvalPanel(){
+  // Elegimos PV1 y PV2 si existen
+  const pv1 = latest.pv[1], pv2 = latest.pv[2];
+  const fen = frames[idx] || game.fen();
+
+  let linesText = '';
+  lastArrows = []; // para render
+  if(pv1){
+    const san1 = pvUciToSAN(fen, pv1.pv);
+    linesText += `① ${san1}\n`;
+    updateEvalBar(pv1.score);
+    showEval(scoreToEvalText(pv1.score), latest.depth, (san1.split(' ')[0]||'—'));
+    const m1 = firstMoveFromUci(pv1.pv); if(m1.from && m1.to) lastArrows.push(m1);
+  }
+  if(pv2){
+    const san2 = pvUciToSAN(fen, pv2.pv);
+    linesText += `② ${san2}\n`;
+    const m2 = firstMoveFromUci(pv2.pv); if(m2.from && m2.to) lastArrows.push(m2);
+  }
+  document.getElementById('pvBox').textContent = linesText || 'Pensando…';
+  render(); // redibuja con flechas
+}
+function showEval(evalTxt, depth, best){
+  document.getElementById('evalBox').textContent =
+    `Eval: ${evalTxt} | Profundidad: ${depth||'—'} | Mejor jugada: ${best||'—'}`;
+}
+
+/* Lanzar análisis (con cooldown para no parpadear) */
+function triggerAnalyze(){
+  const now = performance.now();
+  if(now - lastAnalyzeAt < 800) return; // enfriar ~0.8s
+  lastAnalyzeAt = now;
+
+  ensureEngine();
+  analyzing = true; resetLatest();
+  const depth = +document.getElementById('depthSel').value || 16;
+  const mpv   = +document.getElementById('linesSel').value || 2;
+  const fen   = frames[idx] || game.fen();
+
+  document.getElementById('pvBox').textContent = 'Pensando… (motor)';
+  engine.postMessage('uci');
   engine.postMessage('isready');
   engine.postMessage('ucinewgame');
-  engine.postMessage('position fen '+fen);
-  engine.postMessage('go depth '+depth);
-}
-function scheduleAutoAnalyze(){
-  clearTimeout(autoTimer);
-  autoTimer=setTimeout(async()=>{ const e=await ensureEngine(); if(e) analyzePosition(); }, 220);
+  engine.postMessage(`setoption name MultiPV value ${mpv}`);
+  engine.postMessage(`position fen ${fen}`);
+  engine.postMessage(`go depth ${depth}`);
 }
 
-/* botones motor */
-document.getElementById('analyzeBtn').onclick = async ()=>{ const e=await ensureEngine(); if(e) analyzePosition(); };
-document.getElementById('stopBtn').onclick = ()=>{ if(engine) engine.postMessage('stop'); };
+document.getElementById('analyzeBtn').onclick = ()=> triggerAnalyze();
+document.getElementById('stopBtn').onclick    = ()=> { if(engine) engine.postMessage('stop'); analyzing=false; };
 
-/* inicio */
-window.addEventListener('load', ()=>{ if(initGame()) render(); });
+/* ===================== Inicialización ===================== */
+window.addEventListener('load', ()=>{
+  if(initGame()){
+    render();
+    // demo rápida desde textarea
+    loadPGN(document.getElementById('pgnText').value);
+  }
+});
 </script>
 </body>
 </html>
