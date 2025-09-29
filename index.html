@@ -7,16 +7,10 @@
 
 <style>
   :root{
-    /* Tema */
     --bg:#0b1220; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#a7b6c9;
-    /* Tablero verde */
-    --sq-a:#e8f1e6; /* claro */
-    --sq-b:#6fb363; /* verde */
-    /* Botones */
+    --sq-a:#e8f1e6; --sq-b:#6fb363;
     --btn:#223149; --btnbd:#364760; --btnh:#2e4970; --ok:#22c55e;
-    /* Flechas */
-    --arrow1:#28d06e; /* mejor */
-    --arrow2:#4aa3ff; /* segunda */
+    --arrow1:#28d06e; --arrow2:#4aa3ff;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
@@ -24,14 +18,11 @@
   .wrap{max-width:1120px;margin:0 auto;padding:16px}
   .grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
   @media (max-width:980px){.grid{grid-template-columns:1fr}}
-
   .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
 
-  /* tablero */
   #canvasBox{width:100%;max-width:720px;margin:auto}
-  canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent}
+  canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px}
 
-  /* controles */
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   button{background:var(--btn);border:1px solid var(--btnbd);color:var(--txt);border-radius:10px;padding:10px 14px;cursor:pointer}
   button:hover{background:var(--btnh)}
@@ -44,28 +35,19 @@
   .note{color:var(--muted);font-size:14px}
   .ok{color:var(--ok)}
 
-  /* Barra evaluación */
   .evalbar-wrap{height:14px;border-radius:8px;overflow:hidden;border:1px solid var(--borde);background:linear-gradient(90deg,#3d5a96 0%,#3d5a96 50%,#2d7a3e 50%,#2d7a3e 100%)}
   .evalbar-pointer{position:relative;height:100%}
-  .evalbar-pointer::after{
-    content:""; position:absolute; top:-3px; width:2px; height:20px; background:#fff; left:50%;
-    box-shadow:0 0 4px #000a;
-  }
+  .evalbar-pointer::after{content:"";position:absolute;top:-3px;width:2px;height:20px;background:#fff;left:50%;box-shadow:0 0 4px #000a}
 </style>
 
-<!-- Reglas PGN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
 </head>
 <body>
   <h1>Visor PGN — sube tu partida + análisis</h1>
 
   <div class="wrap grid">
-    <!-- IZQUIERDA: tablero + controles -->
     <div class="panel">
-      <div id="canvasBox">
-        <canvas id="board" width="720" height="720"></canvas>
-      </div>
-
+      <div id="canvasBox"><canvas id="board" width="720" height="720"></canvas></div>
       <div class="row" style="margin-top:12px">
         <button id="prevBtn" title="Anterior">←</button>
         <button id="playBtn" class="primary" title="Play / Pausa">▶</button>
@@ -75,34 +57,23 @@
           <input id="autoChk" type="checkbox" checked> Auto-analizar
         </label>
       </div>
-
       <div class="row" style="margin-top:8px">
-        <label>Velocidad (ms)
-          <input id="speed" type="number" value="800" min="120" step="40" style="width:110px">
-        </label>
+        <label>Velocidad (ms) <input id="speed" type="number" value="800" min="120" step="40" style="width:110px"></label>
         <label>Profundidad
-          <select id="depthSel">
-            <option>12</option><option selected>16</option><option>18</option><option>20</option>
-          </select>
+          <select id="depthSel"><option>12</option><option selected>16</option><option>18</option><option>20</option></select>
         </label>
         <label>Líneas
-          <select id="linesSel">
-            <option value="1">1</option>
-            <option value="2" selected>2</option>
-          </select>
+          <select id="linesSel"><option value="1">1</option><option value="2" selected>2</option></select>
         </label>
       </div>
-
       <div class="note" id="status" style="margin-top:8px">OK: tablero dibujado.</div>
     </div>
 
-    <!-- DERECHA: carga + análisis -->
     <div class="panel">
       <div class="row">
         <input id="file" type="file" accept=".pgn,.txt">
         <button id="loadFileBtn" class="primary">Cargar PGN</button>
       </div>
-
       <div class="note" style="margin:8px 0 6px">O pega un PGN aquí:</div>
       <textarea id="pgnText">[Event "Mini"]
 [Site "-"]
@@ -114,12 +85,10 @@
 
 1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0
       </textarea>
-
       <div class="row" style="margin-top:8px">
         <button id="loadTextBtn" class="primary">Cargar desde texto</button>
         <button id="copyFenBtn">Copiar FEN</button>
       </div>
-
       <div id="gameInfo" class="note" style="margin-top:10px">Sin partida cargada.</div>
       <div id="movesBox" class="box mono" style="margin-top:6px">Movidas aparecerán aquí…</div>
 
@@ -127,29 +96,25 @@
       <div class="evalbar-wrap" title="Barra de evaluación (−10 … +10)">
         <div id="evalPointer" class="evalbar-pointer" style="left:50%"></div>
       </div>
-
       <div class="row" style="margin-top:8px">
         <button id="analyzeBtn" class="primary">Analizar posición</button>
         <button id="stopBtn">Detener</button>
       </div>
-
       <div class="box" id="evalBox" style="margin-top:8px">Eval: — | Profundidad: — | Mejor jugada: —</div>
       <div class="box mono" id="pvBox" style="margin-top:8px">Líneas aparecerán aquí…</div>
     </div>
   </div>
 
 <script>
-/* ===================== Tablero (canvas) ===================== */
+/* ===== Canvas tablero ===== */
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d',{alpha:true});
 const SIZE = 720, S = SIZE/8;
 const COLORS = { light:getCss('--sq-a'), dark:getCss('--sq-b') };
 const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
-
 function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
 function drawBoard(fenPieces, arrows=[]){
-  // casillas
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
       const light = (r+c)%2===0;
@@ -157,7 +122,6 @@ function drawBoard(fenPieces, arrows=[]){
       ctx.fillRect(c*S, r*S, S, S);
     }
   }
-  // piezas
   const rows = fenPieces.split('/');
   ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
   for(let r=0;r<8;r++){
@@ -167,72 +131,94 @@ function drawBoard(fenPieces, arrows=[]){
       else{
         const x=(file+0.5)*S, y=(r+0.5)*S;
         ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#0f0f0f';
-        ctx.strokeStyle = '#00000020'; ctx.lineWidth = 2; // pequeño contorno
         ctx.fillText(GLYPH[ch]||'', x, y);
         file++;
       }
     }
   }
-  // flechas (hasta 2)
   arrows.forEach((a,i)=> drawArrow(a.from, a.to, i===0? getCss('--arrow1'): getCss('--arrow2')));
 }
-
-function algebraicToXY(sq){ // 'e4' -> {x,y} en px (centro)
-  const file = sq.charCodeAt(0) - 97;
-  const rank = 8 - parseInt(sq[1],10);
-  return { x:(file+0.5)*S, y:(rank+0.5)*S };
-}
-function drawArrow(from, to, color){
-  const A = algebraicToXY(from), B = algebraicToXY(to);
-  ctx.strokeStyle = color; ctx.lineWidth = 10; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
-  // cabeza
-  const ang = Math.atan2(B.y-A.y, B.x-A.x);
-  const L = 18;
-  ctx.beginPath();
-  ctx.moveTo(B.x, B.y);
-  ctx.lineTo(B.x - L*Math.cos(ang-0.5), B.y - L*Math.sin(ang-0.5));
-  ctx.moveTo(B.x, B.y);
-  ctx.lineTo(B.x - L*Math.cos(ang+0.5), B.y - L*Math.sin(ang+0.5));
+function algebraicToXY(sq){ const f = sq.charCodeAt(0)-97, r=8-parseInt(sq[1],10); return {x:(f+0.5)*S, y:(r+0.5)*S}; }
+function drawArrow(from,to,color){
+  const A=algebraicToXY(from), B=algebraicToXY(to);
+  ctx.strokeStyle=color; ctx.lineWidth=10; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+  const ang=Math.atan2(B.y-A.y,B.x-A.x), L=18;
+  ctx.beginPath(); ctx.moveTo(B.x,B.y);
+  ctx.lineTo(B.x-L*Math.cos(ang-0.5), B.y-L*Math.sin(ang-0.5));
+  ctx.moveTo(B.x,B.y);
+  ctx.lineTo(B.x-L*Math.cos(ang+0.5), B.y-L*Math.sin(ang+0.5));
   ctx.stroke();
 }
 
-/* ===================== Lógica de partida (chess.js) ===================== */
+/* ===== Partida (chess.js) ===== */
 let game, frames=[], idx=0, lastArrows=[];
-function initGame(){
-  if(typeof Chess!=='function'){
-    setStatus('No se pudo cargar chess.js.'); return false;
-  }
-  game = new Chess(); frames=[game.fen()]; idx=0; render(); return true;
-}
-function render(){
-  const fenPieces = (frames[idx]||game.fen()).split(' ')[0];
-  drawBoard(fenPieces, lastArrows);
-  setStatus(`Posición ${idx}/${frames.length-1}`);
-}
+function initGame(){ if(typeof Chess!=='function'){ setStatus('No se pudo cargar chess.js.'); return false; } game=new Chess(); frames=[game.fen()]; idx=0; render(); return true; }
+function render(){ const fenPieces = (frames[idx]||game.fen()).split(' ')[0]; drawBoard(fenPieces,lastArrows); setStatus(`Posición ${idx}/${frames.length-1}`); }
 function setStatus(msg){ document.getElementById('status').textContent = msg; }
 
+/* PGN robusto */
+function smartDecode(buf){
+  let txt=new TextDecoder('utf-8',{fatal:false}).decode(buf);
+  // si hay muchos � intentamos latin1
+  if((txt.match(/\uFFFD/g)||[]).length>5){
+    try{ txt=new TextDecoder('windows-1252').decode(buf); }catch{}
+  }
+  return txt;
+}
+function splitFirstGame(txt){
+  // preferir por [Event
+  const parts=txt.split(/\n\s*\n(?=\[Event\b)/g);
+  if(parts.length>1) return parts[0];
+  return txt;
+}
 function cleanPGN(txt){
   return txt
+    .replace(/^\uFEFF/,'')            // BOM
+    .replace(/\r/g,'\n')              // normaliza EOL
+    .replace(/[\u2026]/g,'...')       // elipsis unicode
+    .replace(/\$[0-9]+/g,' ')         // NAGs $1
     .replace(/\{[^}]*\}/g,' ')        // comentarios {...}
     .replace(/\([^)]*\)/g,' ')        // variantes (...)
-    .replace(/\[[^\]]*\]/g, (m)=>m)   // headers ok
-    .replace(/;.*$/gm,' ')            // comentarios ;
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g,' ') // limpia raros (deja ASCII imprimible)
     .replace(/\s+/g,' ')
     .trim();
 }
-function loadPGN(pgn){
-  const ok = game.load_pgn(cleanPGN(pgn), { sloppy:true });
-  if(!ok){ alert('PGN inválido.'); return; }
-  const san = game.history(); // SAN principal
-  frames = [game.fen()]; game.reset(); frames=[game.fen()];
+function tryLoadPGN(raw){
+  const candidate = splitFirstGame(raw);
+  const cleaned = cleanPGN(candidate);
+  const ok = game.load_pgn(cleaned, {sloppy:true});
+  if(!ok){
+    setStatus('PGN inválido. Revisa que el archivo contenga una sola partida y movimientos válidos.');
+    document.getElementById('movesBox').textContent = cleaned.slice(0,200)+'…';
+  }
+  return ok;
+}
+
+async function loadPGNFromFile(file){
+  try{
+    const buf = await file.arrayBuffer();
+    const txt = smartDecode(buf);
+    game.reset();
+    if(!tryLoadPGN(txt)) return;
+    afterLoaded();
+  }catch(e){
+    setStatus('Error leyendo el archivo PGN.');
+  }
+}
+function loadPGNFromText(text){
+  game.reset();
+  if(!tryLoadPGN(text)) return;
+  afterLoaded();
+}
+function afterLoaded(){
+  const san = game.history(); frames=[game.fen()]; game.reset(); frames=[game.fen()];
   for(const mv of san){ game.move(mv); frames.push(game.fen()); }
   idx=0;
-  document.getElementById('movesBox').textContent =
-    san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
+  document.getElementById('movesBox').textContent = san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
   document.getElementById('gameInfo').textContent = `Movidas: ${san.length}`;
   render();
-  if(document.getElementById('autoChk').checked) triggerAnalyze();
+  if(autoOn()) triggerAnalyze();
 }
 
 /* Controles */
@@ -249,17 +235,15 @@ document.getElementById('playBtn').onclick = ()=>{
 
 document.getElementById('loadFileBtn').onclick = async ()=>{
   const f = document.getElementById('file').files?.[0];
-  if(!f){ alert('Selecciona un archivo .pgn'); return; }
-  loadPGN(await f.text());
+  if(!f){ setStatus('Selecciona un archivo .pgn'); return; }
+  await loadPGNFromFile(f);
 };
-document.getElementById('loadTextBtn').onclick = ()=> loadPGN(document.getElementById('pgnText').value);
-document.getElementById('copyFenBtn').onclick = async ()=>{
-  const fen = frames[idx] || game.fen(); await navigator.clipboard.writeText(fen); setStatus('FEN copiado.');
-};
+document.getElementById('loadTextBtn').onclick = ()=> loadPGNFromText(document.getElementById('pgnText').value);
+document.getElementById('copyFenBtn').onclick = async ()=>{ const fen = frames[idx] || game.fen(); await navigator.clipboard.writeText(fen); setStatus('FEN copiado.'); };
 function autoOn(){ return document.getElementById('autoChk').checked; }
 
-/* ===================== Stockfish (Worker con mirrors) ===================== */
-let engine=null, engineReady=false, analyzing=false, lastAnalyzeAt=0;
+/* ===== Stockfish (mirrors) ===== */
+let engine=null, analyzing=false, lastAnalyzeAt=0;
 const MIRRORS = [
   'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.js',
   'https://raw.githubusercontent.com/niklasf/stockfish.js/gh-pages/src/stockfish.js'
@@ -268,136 +252,66 @@ function ensureEngine(){
   if(engine) return engine;
   const code = `
     self.onerror=function(){};
-    let ok=false;
-    const urls=${JSON.stringify(MIRRORS)};
-    (async()=>{
-      for(const u of urls){
-        try{ importScripts(u); ok=true; postMessage({type:'_loaded',src:u}); break; }catch(e){}
-      }
-      if(!ok) postMessage({type:'sf-error',msg:'Mirrors fallaron'});
-    })();
+    let ok=false; const urls=${JSON.stringify(MIRRORS)};
+    (async()=>{ for(const u of urls){ try{ importScripts(u); ok=true; postMessage({type:'_loaded',src:u}); break; }catch(e){} }
+      if(!ok) postMessage({type:'sf-error',msg:'Mirrors fallaron'}); })();
   `;
-  const blob = new Blob([code], {type:'application/javascript'});
-  engine = new Worker(URL.createObjectURL(blob));
-  engine.onmessage = onEngineMsg;
-  return engine;
+  engine = new Worker(URL.createObjectURL(new Blob([code],{type:'application/javascript'})));
+  engine.onmessage = onEngineMsg; return engine;
 }
+let latest = {depth:0, pv:{}};
+function resetLatest(){ latest={depth:0, pv:{}}; }
 function onEngineMsg(e){
-  const d = typeof e.data==='string' ? e.data : e.data;
-  if(d && d.type==='sf-error'){ showEval('—','—','No se pudo cargar Stockfish (mirrors).'); return; }
-  if(d && d.type==='_loaded'){ /* listo para UCI cuando analicemos */ return; }
+  const d = typeof e.data==='string'? e.data : e.data;
+  if(d && d.type==='sf-error'){ showEval('—','—','Motor no cargado'); document.getElementById('pvBox').textContent='No se pudo cargar Stockfish (mirrors).'; return; }
   const line = typeof d==='string'? d : '';
   if(!line) return;
-
-  // Parseo UCI
   if(line.startsWith('info ')){
-    const depth = getNum(line, /\bdepth\s+(\d+)/);
+    const depth = getNum(line, /\bdepth\s+(\d+)/); if(depth) latest.depth=Math.max(latest.depth,depth);
     const multipv = getNum(line, /\bmultipv\s+(\d+)/) || 1;
     const cp  = getNum(line, /\bcp\s+(-?\d+)/);
     const mate= getNum(line, /\bmate\s+(-?\d+)/);
     const pv  = (line.match(/\bpv\s+(.+)/)||[])[1] || '';
-
-    if(depth) latest.depth = Math.max(latest.depth, depth);
     const score = (mate!=null)? {mate} : {cp};
-    if(pv){
-      latest.pv[multipv] = { pv, score };
-      refreshEvalPanel();
-    }
+    if(pv){ latest.pv[multipv]={pv,score}; refreshEvalPanel(); }
   }
-  if(line.startsWith('bestmove')){ analyzing=false; }
+  if(line.startsWith('bestmove')) analyzing=false;
 }
-function getNum(s,re){ const m = s.match(re); return m? Number(m[1]): null; }
+function getNum(s,re){ const m=s.match(re); return m? Number(m[1]): null; }
 
-let latest = { depth:0, pv:{} };
-function resetLatest(){ latest={depth:0, pv:{}}; }
-
-/* Barra evaluación y PV SAN */
 function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
-function scoreToEvalText(sc){
-  if(sc.mate!=null) return '#'+sc.mate;
-  if(sc.cp!=null) return (sc.cp/100).toFixed(2);
-  return '—';
-}
-function updateEvalBar(sc){
-  // cp [-1000..1000] ≈ [-10..10]
-  let cp = sc.mate!=null ? (sc.mate>0? 1000 : -1000) : (sc.cp??0);
-  const perc = (clamp(cp,-1000,1000)+1000)/2000; // 0..1
-  const ptr = document.getElementById('evalPointer');
-  ptr.style.left = (perc*100)+'%';
-}
-function pvUciToSAN(fen, uciLine){
-  const ch = new Chess(); ch.load(fen);
-  const moves = uciLine.trim().split(/\s+/);
-  const sanList = [];
-  for(const u of moves){
-    const from=u.slice(0,2), to=u.slice(2,4), prom=u[4];
-    const legal = ch.moves({ verbose:true }).find(m=> m.from===from && m.to===to && (!prom || m.promotion===prom));
-    if(!legal) break;
-    sanList.push(legal.san);
-    ch.move(legal);
-  }
-  return sanList.join(' ');
-}
-function firstMoveFromUci(uci){
-  const m = uci.trim().split(/\s+/)[0]||''; return {from:m.slice(0,2), to:m.slice(2,4)};
-}
+function scoreToEvalText(sc){ if(sc.mate!=null) return '#'+sc.mate; if(sc.cp!=null) return (sc.cp/100).toFixed(2); return '—'; }
+function updateEvalBar(sc){ let cp = sc.mate!=null ? (sc.mate>0?1000:-1000) : (sc.cp??0);
+  const perc=(clamp(cp,-1000,1000)+1000)/2000; document.getElementById('evalPointer').style.left=(perc*100)+'%'; }
+function pvUciToSAN(fen, uci){ const ch=new Chess(); ch.load(fen); const ms=uci.trim().split(/\s+/); const san=[]; for(const u of ms){ const from=u.slice(0,2),to=u.slice(2,4),prom=u[4]; const m=ch.moves({verbose:true}).find(x=>x.from===from&&x.to===to&&(!prom||x.promotion===prom)); if(!m) break; san.push(m.san); ch.move(m);} return san.join(' '); }
+function firstMoveFromUci(uci){ const m=uci.trim().split(/\s+/)[0]||''; return {from:m.slice(0,2), to:m.slice(2,4)}; }
 function refreshEvalPanel(){
-  // Elegimos PV1 y PV2 si existen
-  const pv1 = latest.pv[1], pv2 = latest.pv[2];
-  const fen = frames[idx] || game.fen();
-
-  let linesText = '';
-  lastArrows = []; // para render
-  if(pv1){
-    const san1 = pvUciToSAN(fen, pv1.pv);
-    linesText += `① ${san1}\n`;
-    updateEvalBar(pv1.score);
-    showEval(scoreToEvalText(pv1.score), latest.depth, (san1.split(' ')[0]||'—'));
-    const m1 = firstMoveFromUci(pv1.pv); if(m1.from && m1.to) lastArrows.push(m1);
-  }
-  if(pv2){
-    const san2 = pvUciToSAN(fen, pv2.pv);
-    linesText += `② ${san2}\n`;
-    const m2 = firstMoveFromUci(pv2.pv); if(m2.from && m2.to) lastArrows.push(m2);
-  }
-  document.getElementById('pvBox').textContent = linesText || 'Pensando…';
-  render(); // redibuja con flechas
+  const pv1=latest.pv[1], pv2=latest.pv[2]; const fen=frames[idx]||game.fen(); let text='';
+  lastArrows=[]; if(pv1){ const san1=pvUciToSAN(fen,pv1.pv); text+=`① ${san1}\n`; updateEvalBar(pv1.score); showEval(scoreToEvalText(pv1.score),latest.depth,(san1.split(' ')[0]||'—')); const m1=firstMoveFromUci(pv1.pv); if(m1.from) lastArrows.push(m1); }
+  if(pv2){ const san2=pvUciToSAN(fen,pv2.pv); text+=`② ${san2}\n`; const m2=firstMoveFromUci(pv2.pv); if(m2.from) lastArrows.push(m2); }
+  document.getElementById('pvBox').textContent=text||'Pensando…'; render();
 }
-function showEval(evalTxt, depth, best){
-  document.getElementById('evalBox').textContent =
-    `Eval: ${evalTxt} | Profundidad: ${depth||'—'} | Mejor jugada: ${best||'—'}`;
-}
+function showEval(ev,depth,best){ document.getElementById('evalBox').textContent=`Eval: ${ev} | Profundidad: ${depth||'—'} | Mejor jugada: ${best||'—'}`; }
 
-/* Lanzar análisis (con cooldown para no parpadear) */
 function triggerAnalyze(){
-  const now = performance.now();
-  if(now - lastAnalyzeAt < 800) return; // enfriar ~0.8s
-  lastAnalyzeAt = now;
-
-  ensureEngine();
-  analyzing = true; resetLatest();
-  const depth = +document.getElementById('depthSel').value || 16;
-  const mpv   = +document.getElementById('linesSel').value || 2;
-  const fen   = frames[idx] || game.fen();
-
-  document.getElementById('pvBox').textContent = 'Pensando… (motor)';
-  engine.postMessage('uci');
-  engine.postMessage('isready');
-  engine.postMessage('ucinewgame');
+  const now=performance.now(); if(now-lastAnalyzeAt<800) return; lastAnalyzeAt=now;
+  ensureEngine(); analyzing=true; resetLatest();
+  const depth=+document.getElementById('depthSel').value||16;
+  const mpv  =+document.getElementById('linesSel').value||2;
+  const fen  =frames[idx]||game.fen();
+  document.getElementById('pvBox').textContent='Pensando…';
+  engine.postMessage('uci'); engine.postMessage('isready'); engine.postMessage('ucinewgame');
   engine.postMessage(`setoption name MultiPV value ${mpv}`);
-  engine.postMessage(`position fen ${fen}`);
-  engine.postMessage(`go depth ${depth}`);
+  engine.postMessage(`position fen ${fen}`); engine.postMessage(`go depth ${depth}`);
 }
+document.getElementById('analyzeBtn').onclick=()=>triggerAnalyze();
+document.getElementById('stopBtn').onclick   =()=>{ if(engine) engine.postMessage('stop'); analyzing=false; };
 
-document.getElementById('analyzeBtn').onclick = ()=> triggerAnalyze();
-document.getElementById('stopBtn').onclick    = ()=> { if(engine) engine.postMessage('stop'); analyzing=false; };
-
-/* ===================== Inicialización ===================== */
+/* ===== Init ===== */
 window.addEventListener('load', ()=>{
   if(initGame()){
     render();
-    // demo rápida desde textarea
-    loadPGN(document.getElementById('pgnText').value);
+    loadPGNFromText(document.getElementById('pgnText').value);
   }
 });
 </script>
