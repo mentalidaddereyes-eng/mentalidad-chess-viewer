@@ -150,7 +150,98 @@ document.getElementById('copyFenBtn').onclick = async ()=>{
   setStatus('FEN copiado.');
 };
 
-/* ===== Carga PGN ===== */
+<!-- ===== Carga PGN ===== -->
+<script>
+function normalizeNewlines(s){ return s.replace(/\r\n?/g,"\n"); }
+function stripBOM(s){ return s.replace(/^\uFEFF/,""); }
+
+// Si el texto trae varias partidas, recorta la primera
+function takeFirstGame(pgn){
+  const start = pgn.indexOf('[Event');
+  if(start === -1) return pgn;
+  const rest = pgn.slice(start+6);
+  const next = rest.indexOf('\n[Event');
+  return next === -1 ? pgn.slice(start) : pgn.slice(start, start+6+next);
+}
+
+// Limpieza suave para casos duros (NAGs, relojes, comentarios)
+function cleanPGN(pgn){
+  let t = pgn;
+  t = t.replace(/\$[0-9]+/g, '');             // NAGs: $1 $2 …
+  t = t.replace(/\[%clk [^\]]*]/g, '');       // [%clk …]
+  t = t.replace(/\[%emt [^\]]*]/g, '');       // [%emt …]
+  t = t.replace(/\{[^}]*\}/g, '');            // {comentarios}
+  t = t.replace(/;.*$/gm, '');                // ; comentario de línea
+  t = t.replace(/\s1-0\s*|\s0-1\s*|\s1\/2-1\/2\s*|\s\*\s*/g, ' '); // resultados inline
+  return t;
+}
+
+// Intenta decodificar el archivo robustamente
+async function readFileAsTextSmart(file){
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+
+  // BOMs
+  const hasUTF8  = bytes.length>=3 && bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF;
+  const hasUTF16LE = bytes.length>=2 && bytes[0]===0xFF && bytes[1]===0xFE;
+  const hasUTF16BE = bytes.length>=2 && bytes[0]===0xFE && bytes[1]===0xFF;
+
+  try{
+    if(hasUTF16LE) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+    if(hasUTF16BE) return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+    if(hasUTF8)    return new TextDecoder('utf-8').decode(bytes.subarray(3));
+    // Heurística: muchos 0x00 → UTF-16
+    const zeros = bytes.filter(b=>b===0).length;
+    if(zeros > bytes.length*0.2){
+      // probar LE y luego BE
+      try { return new TextDecoder('utf-16le').decode(bytes); } catch{}
+      try { return new TextDecoder('utf-16be').decode(bytes); } catch{}
+    }
+    // probar UTF-8 normal
+    try { return new TextDecoder('utf-8', {fatal:true}).decode(bytes); } catch{}
+    // último recurso Windows-1252
+    return new TextDecoder('windows-1252').decode(bytes);
+  }catch{
+    // fallback simple
+    return new TextDecoder().decode(bytes);
+  }
+}
+
+async function loadPGNFromFile(){
+  const f = document.getElementById('pgnFile').files?.[0];
+  if(!f){ alert('Selecciona un archivo .pgn'); return; }
+  let raw = await readFileAsTextSmart(f);
+  raw = stripBOM(normalizeNewlines(raw));
+  raw = takeFirstGame(raw);
+  if(!rebuildFramesFromPGN(raw)){
+    // intento con limpieza
+    const cleaned = cleanPGN(raw);
+    if(!rebuildFramesFromPGN(cleaned)){
+      alert('PGN inválido.');
+      return;
+    }
+  }
+  refresh();
+}
+
+function loadPGNFromText(){
+  let txt = document.getElementById('pgnText').value;
+  txt = stripBOM(normalizeNewlines(txt));
+  txt = takeFirstGame(txt);
+  if(!rebuildFramesFromPGN(txt)){
+    const cleaned = cleanPGN(txt);
+    if(!rebuildFramesFromPGN(cleaned)){
+      alert('PGN inválido.');
+      return;
+    }
+  }
+  refresh();
+}
+
+document.getElementById('loadTextBtn').onclick = loadPGNFromText;
+document.getElementById('loadFileBtn').onclick = loadPGNFromFile;
+</script>
+
 document.getElementById('loadTextBtn').onclick = ()=>{
   rebuildFramesFromPGN(document.getElementById('pgnText').value) && refresh();
 };
