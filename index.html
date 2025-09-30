@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Visor PGN — tablero interactivo + análisis</title>
+<title>Visor PGN — interactivo + análisis</title>
 
 <style>
   :root{
@@ -30,7 +30,7 @@
   .primary{background:#2f7d4e;border-color:#2f7d4e}
   input,textarea,select{font:inherit}
   input[type="number"],select{background:#0b1627;border:1px solid var(--borde);border-radius:8px;padding:8px;color:var(--txt)}
-  textarea{width:100%;min-height:220px;background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px;color:var(--txt);resize:vertical;white-space:pre-wrap}
+  textarea{width:100%;min-height:200px;background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px;color:var(--txt);resize:vertical;white-space:pre-wrap}
   .box{background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
   .note{color:var(--muted);font-size:14px}
@@ -40,7 +40,7 @@
   .evalbar-pointer::after{content:"";position:absolute;top:-3px;width:2px;height:20px;background:#fff;left:50%;box-shadow:0 0 4px #000a}
 </style>
 
-<!-- Reglas PGN/Jugadas -->
+<!-- Reglas PGN/jugadas -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
 </head>
 <body>
@@ -71,7 +71,7 @@
         </label>
       </div>
 
-      <div class="note" id="status" style="margin-top:8px">OK: tablero listo. Haz click en una pieza para moverla.</div>
+      <div class="note" id="status" style="margin-top:8px">OK: tablero listo. Click o arrastra una pieza para mover.</div>
     </div>
 
     <!-- Carga PGN + análisis -->
@@ -81,16 +81,7 @@
         <button id="loadFileBtn" class="primary">Cargar PGN</button>
       </div>
       <div class="note" style="margin:8px 0 6px">O pega un PGN:</div>
-      <textarea id="pgnText">[Event "Mini"]
-[Site "-"]
-[Date "2024.09.28"]
-[Round "-"]
-[White "Blancas"]
-[Black "Negras"]
-[Result "1-0"]
-
-1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0
-      </textarea>
+      <textarea id="pgnText" placeholder="Pega aquí el texto PGN y pulsa “Cargar desde texto”."></textarea>
       <div class="row" style="margin-top:8px">
         <button id="loadTextBtn" class="primary">Cargar desde texto</button>
         <button id="copyFenBtn">Copiar FEN</button>
@@ -122,8 +113,12 @@ const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'
 function getCss(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 function sqToXY(sq){ const f=sq.charCodeAt(0)-97, r=8-Number(sq[1]); return {x:f*S,y:r*S}; }
 function xyToSq(x,y){ const f=Math.floor(x/S), r=Math.floor(y/S); if(f<0||f>7||r<0||r>7) return null; return String.fromCharCode(97+f)+(8-r); }
+function centerOf(sq){ const p=sqToXY(sq); return {x:p.x+S/2,y:p.y+S/2}; }
 
-function drawBoard(fenPieces, arrows=[], highlights={sel:null, moves:[], last:null}){
+let lastArrows=[], lastMove=null;
+let selSq=null, selMoves=[];
+
+function drawBoard(fenPieces, dragging=null){
   // casillas
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
@@ -131,36 +126,61 @@ function drawBoard(fenPieces, arrows=[], highlights={sel:null, moves:[], last:nu
       ctx.fillRect(c*S,r*S,S,S);
     }
   }
-  // último movimiento (sombreado)
-  if(highlights.last){
+  // último movimiento
+  if(lastMove){
     ctx.fillStyle=getCss('--last');
-    [highlights.last.from, highlights.last.to].forEach(s=>{ if(!s) return; const p=sqToXY(s); ctx.fillRect(p.x,p.y,S,S); });
+    [lastMove.from,lastMove.to].forEach(s=>{ if(!s) return; const p=sqToXY(s); ctx.fillRect(p.x,p.y,S,S); });
   }
   // piezas
   const rows=fenPieces.split('/');
-  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=`${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font=`${S*0.72}px "Segoe UI Symbol","Apple Color Emoji","Noto Color Emoji",serif`;
+
   for(let r=0;r<8;r++){
     let file=0;
     for(const ch of rows[r]){
       if(/\d/.test(ch)){ file+=+ch; continue; }
       const x=(file+0.5)*S, y=(r+0.5)*S;
-      ctx.fillStyle=/[PRNBQK]/.test(ch)?'#ffffff':'#0f0f0f';
-      ctx.fillText(GLYPH[ch]||'',x,y);
+      // si se está arrastrando esta pieza, se dibuja aparte
+      if(dragging && dragging.fromRow===r && dragging.fromCol===file){ file++; continue; }
+      drawPieceGlyph(ch,x,y);
       file++;
     }
   }
-  // selección
-  if(highlights.sel){
-    const {x,y}=sqToXY(highlights.sel);
-    ctx.fillStyle=getCss('--sel'); ctx.fillRect(x,y,S,S);
-  }
-  // destinos
-  ctx.fillStyle=getCss('--dot');
-  highlights.moves.forEach(s=>{ const p=sqToXY(s); ctx.beginPath(); ctx.arc(p.x+S/2,p.y+S/2,S*0.15,0,Math.PI*2); ctx.fill(); });
 
-  // flechas análisis
-  arrows.forEach((a,i)=>drawArrow(a.from,a.to,i===0?getCss('--arrow1'):getCss('--arrow2')));
+  // selección + destinos
+  if(selSq){
+    const {x,y}=sqToXY(selSq); ctx.fillStyle=getCss('--sel'); ctx.fillRect(x,y,S,S);
+    ctx.fillStyle=getCss('--dot');
+    selMoves.forEach(s=>{ const p=sqToXY(s); ctx.beginPath(); ctx.arc(p.x+S/2,p.y+S/2,S*0.15,0,Math.PI*2); ctx.fill(); });
+  }
+
+  // flechas
+  lastArrows.forEach((a,i)=>drawArrow(a.from,a.to,i===0?getCss('--arrow1'):getCss('--arrow2')));
+
+  // pieza en “drag”
+  if(dragging){
+    ctx.globalAlpha=0.9;
+    drawPieceGlyph(dragging.ch, dragging.x, dragging.y, true);
+    ctx.globalAlpha=1;
+  }
 }
+
+function drawPieceGlyph(ch,cx,cy,isAbs=false){
+  // blanco relleno + trazo oscuro para que se vea sobre claro
+  const isWhite=/[PRNBQK]/.test(ch);
+  ctx.fillStyle=isWhite?'#ffffff':'#0f0f0f';
+  ctx.strokeStyle=isWhite?'#1b2636':'#e8f1e6';
+  ctx.lineWidth=S*0.06;
+  if(isAbs){ // coordenadas absolutas (arrastre)
+    ctx.fillText(GLYPH[ch]||'', cx, cy);
+    ctx.strokeText(GLYPH[ch]||'', cx, cy);
+  }else{
+    ctx.fillText(GLYPH[ch]||'', cx, cy);
+    ctx.strokeText(GLYPH[ch]||'', cx, cy);
+  }
+}
+
 function drawArrow(from,to,color){
   const A=centerOf(from), B=centerOf(to);
   ctx.strokeStyle=color; ctx.lineWidth=10; ctx.lineCap='round';
@@ -172,48 +192,51 @@ function drawArrow(from,to,color){
   ctx.lineTo(B.x-L*Math.cos(ang+0.5),B.y-L*Math.sin(ang+0.5));
   ctx.stroke();
 }
-function centerOf(sq){ const p=sqToXY(sq); return {x:p.x+S/2,y:p.y+S/2}; }
 
 /* ================== Lógica partida ================== */
-let game, frames=[], idx=0, lastArrows=[], lastMove=null;
-let selSq=null, selMoves=[];
-function initGame(){ if(typeof Chess!=='function'){ setStatus('No se pudo cargar chess.js.'); return false; } game=new Chess(); frames=[game.fen()]; idx=0; render(); return true; }
-function currentFenPieces(){ return (frames[idx]||game.fen()).split(' ')[0]; }
-function render(){ drawBoard(currentFenPieces(), lastArrows, {sel:selSq, moves:selMoves, last:lastMove}); setStatus(`Posición ${idx}/${frames.length-1}`); }
+let game, frames=[], idx=0;
 function setStatus(msg){ document.getElementById('status').textContent=msg; }
-function updateListFromGame(){
-  const san=game.history(); document.getElementById('movesBox').textContent = san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
-  document.getElementById('gameInfo').textContent=`Movidas: ${san.length}`;
-}
+function initGame(){ if(typeof Chess!=='function'){ setStatus('No se pudo cargar chess.js.'); return false; } game=new Chess(); frames=[game.fen()]; idx=0; render(); return true; }
+function currentFen(){ return frames[idx]||game.fen(); }
+function currentFenPieces(){ return currentFen().split(' ')[0]; }
+function render(){ drawBoard(currentFenPieces()); setStatus(`Posición ${idx}/${frames.length-1}`); }
 
-/* ======= PGN robusto (igual que antes) ======= */
-function smartDecode(buf){
-  let txt=new TextDecoder('utf-8',{fatal:false}).decode(buf);
-  if((txt.match(/\uFFFD/g)||[]).length>5){ try{ txt=new TextDecoder('windows-1252').decode(buf);}catch{} }
-  return txt;
-}
-function splitFirstGame(txt){ const parts=txt.split(/\n\s*\n(?=\[Event\b)/g); return parts.length>1?parts[0]:txt; }
+/* ================== PGN robusto ================== */
+function smartDecode(buf){ let txt=new TextDecoder('utf-8',{fatal:false}).decode(buf); if((txt.match(/\uFFFD/g)||[]).length>5){ try{ txt=new TextDecoder('windows-1252').decode(buf);}catch{} } return txt; }
+function splitFirstGame(txt){ const m=txt.indexOf('\n\n[Event'); return m>0?txt.slice(0,m):txt; }
 function cleanPGN(txt){
   return txt.replace(/^\uFEFF/,'').replace(/\r/g,'\n').replace(/[\u2026]/g,'...')
             .replace(/\$[0-9]+/g,' ').replace(/\{[^}]*\}/g,' ').replace(/\([^)]*\)/g,' ')
             .replace(/[^\x09\x0A\x0D\x20-\x7E]/g,' ').replace(/\s+/g,' ').trim();
 }
 function tryLoadPGN(raw){
-  const candidate=splitFirstGame(raw); const cleaned=cleanPGN(candidate);
+  const one=splitFirstGame(raw); const cleaned=cleanPGN(one);
   const ok=game.load_pgn(cleaned,{sloppy:true});
-  if(!ok){ setStatus('PGN inválido.'); document.getElementById('movesBox').textContent=cleaned.slice(0,200)+'…'; }
+  if(!ok){ alert('PGN inválido.'); }
   return ok;
 }
 async function loadPGNFromFile(file){
   try{ const buf=await file.arrayBuffer(); const txt=smartDecode(buf); game.reset(); if(!tryLoadPGN(txt)) return; afterLoaded(); }
-  catch{ setStatus('Error leyendo el archivo PGN.'); }
+  catch{ alert('Error leyendo el archivo PGN.'); }
 }
 function loadPGNFromText(text){ game.reset(); if(!tryLoadPGN(text)) return; afterLoaded(); }
 function afterLoaded(){
   const san=game.history(); frames=[game.fen()]; game.reset(); frames=[game.fen()];
   for(const mv of san){ const m=game.move(mv); frames.push(game.fen()); lastMove={from:m.from,to:m.to}; }
   idx=frames.length-1; selSq=null; selMoves=[]; lastArrows=[];
-  updateListFromGame(); render(); if(autoOn()) triggerAnalyze();
+  updateListFromFrames(); render(); if(autoOn()) triggerAnalyze();
+}
+function updateListFromFrames(){
+  // reconstruir SAN a partir de frames
+  const movesSAN=[]; let prev=new Chess(); prev.load(frames[0]);
+  for(let i=1;i<frames.length;i++){
+    const cur=new Chess(); cur.load(frames[i]);
+    const legal=prev.moves({verbose:true});
+    const played=legal.find(m=>{ const t=new Chess(); t.load(prev.fen()); t.move(m); return t.fen()===cur.fen(); });
+    if(played){ movesSAN.push(played.san); prev=cur; }
+  }
+  document.getElementById('movesBox').textContent=movesSAN.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
+  document.getElementById('gameInfo').textContent=`Movidas: ${movesSAN.length}`;
 }
 
 /* ================== Controles navegación ================== */
@@ -230,83 +253,43 @@ document.getElementById('playBtn').onclick = ()=>{
 
 /* ================== Cargar/copy ================== */
 document.getElementById('loadFileBtn').onclick=async()=>{
-  const f=document.getElementById('file').files?.[0]; if(!f){ setStatus('Selecciona un archivo .pgn'); return; }
+  const f=document.getElementById('file').files?.[0]; if(!f){ alert('Selecciona un archivo .pgn'); return; }
   await loadPGNFromFile(f);
 };
 document.getElementById('loadTextBtn').onclick=()=> loadPGNFromText(document.getElementById('pgnText').value);
-document.getElementById('copyFenBtn').onclick=async()=>{ const fen=frames[idx]||game.fen(); await navigator.clipboard.writeText(fen); setStatus('FEN copiado.'); };
+document.getElementById('copyFenBtn').onclick=async()=>{ await navigator.clipboard.writeText(currentFen()); setStatus('FEN copiado.'); };
 function autoOn(){ return document.getElementById('autoChk').checked; }
 
-/* ================== Interacción: click-to-move ================== */
-function legalTargetsFrom(sq){
-  try{
-    // cargar posición actual en un Chess temporal
-    const ch=new Chess(); ch.load(frames[idx]||game.fen());
-    return ch.moves({square:sq, verbose:true}).map(m=>m.to);
-  }catch{ return []; }
+/* ================== Interacción: click + arrastrar ================== */
+function sideToMoveFen(fen){ return fen.split(' ')[1]; }
+function legalTargetsFromFen(fen,sq){ try{ const ch=new Chess(); ch.load(fen); return ch.moves({square:sq, verbose:true}).map(m=>m.to);}catch{return [];} }
+function getPieceCharAtFen(fen,sq){
+  const ch=new Chess(); ch.load(fen); const p=ch.get(sq); if(!p) return null;
+  const map={p:'p',n:'n',b:'b',r:'r',q:'q',k:'k'}; const g=map[p.type]; return p.color==='w'?g.toUpperCase():g;
 }
-function sideToMove(){ const fen=(frames[idx]||game.fen()); return fen.split(' ')[1]; }
+
+let dragging=null; // {from, fromRow, fromCol, ch, x, y}
 
 function selectSquare(sq){
-  // permitir seleccionar solo si hay pieza del lado al turno (por UX)
-  const ch=new Chess(); ch.load(frames[idx]||game.fen());
-  const piece=ch.get(sq); if(!piece || piece.color!==sideToMove()[0]){ selSq=null; selMoves=[]; render(); return; }
-  selSq=sq; selMoves=legalTargetsFrom(sq); render();
+  const fen=currentFen(); const ch=new Chess(); ch.load(fen); const piece=ch.get(sq);
+  if(!piece || piece.color!==sideToMoveFen(fen)[0]){ selSq=null; selMoves=[]; render(); return; }
+  selSq=sq; selMoves=legalTargetsFromFen(fen,sq); render();
 }
-function tryMove(to){
-  if(!selSq) return;
-  const ch=new Chess(); ch.load(frames[idx]||game.fen());
-  // ¿promoción?
-  let moveObj={from:selSq,to};
-  const piece=ch.get(selSq);
-  const isPromotion = piece && piece.type==='p' && (to.endsWith('8')||to.endsWith('1'));
-  if(isPromotion){
-    const p=prompt('Promoción: q,r,b,n (Dama por defecto)','q')||'q';
-    moveObj.promotion = /[qrbn]/i.test(p)? p.toLowerCase() : 'q';
-  }
-  const move = ch.move(moveObj);
-  if(move){
-    frames=frames.slice(0,idx+1); // descartar futuras si estabas a mitad
-    frames.push(ch.fen());
-    idx=frames.length-1;
-    lastMove={from:move.from,to:move.to};
-    selSq=null; selMoves=[]; lastArrows=[];
-    // actualiza game principal también (para la lista)
-    game.load_pgn(game.pgn()||''); // mantener tags
-    const sanList=new Chess(); sanList.load(frames[0]); // dummy
-    // reconstruimos desde cero:
-    const rebuild=new Chess();
-    rebuild.load(frames[0]);
-    for(let i=1;i<frames.length;i++){
-      // no tenemos SAN guardado aquí; mejor regenerar desde history del ch temporal
-    }
-    // más simple: usa history del ch actual desde el inicio
-    const tmp=new Chess(); tmp.reset();
-    const movesSAN=[];
-    const replay=new Chess();
-    replay.reset();
-    const orig=new Chess(); orig.load(frames[0]); // startpos
-    // reconstruir SAN recorriendo frames: obtener jugada entre frame i-1 y i
-    let prev=new Chess(); prev.load(frames[0]);
-    for(let i=1;i<frames.length;i++){
-      const cur=new Chess(); cur.load(frames[i]);
-      const legal=prev.moves({verbose:true});
-      const played=legal.find(m=>{
-        const test=new Chess(); test.load(prev.fen()); test.move(m);
-        return test.fen()===cur.fen();
-      });
-      if(played){ movesSAN.push(played.san); prev=cur; }
-    }
-    document.getElementById('movesBox').textContent = movesSAN.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
-    document.getElementById('gameInfo').textContent=`Movidas: ${movesSAN.length}`;
-    render();
-    if(autoOn()) triggerAnalyze();
-  }else{
-    // movimiento ilegal -> solo limpia selección
-    selSq=null; selMoves=[]; render();
-  }
+function tryMove(to,fromSel=null,promoHint){
+  const fen=currentFen(); const ch=new Chess(); ch.load(fen);
+  const from = fromSel || selSq; if(!from) return false;
+  let moveObj={from,to};
+  const piece=ch.get(from);
+  const isPromotion=piece && piece.type==='p' && (to.endsWith('8')||to.endsWith('1'));
+  if(isPromotion){ const p=promoHint || prompt('Promoción: q,r,b,n (Dama por defecto)','q')||'q'; moveObj.promotion=/[qrbn]/i.test(p)?p.toLowerCase():'q'; }
+  const mv=ch.move(moveObj);
+  if(mv){
+    frames=frames.slice(0,idx+1); frames.push(ch.fen()); idx=frames.length-1; lastMove={from:mv.from,to:mv.to};
+    selSq=null; selMoves=[]; lastArrows=[]; updateListFromFrames(); render(); if(autoOn()) triggerAnalyze(); return true;
+  }else{ selSq=null; selMoves=[]; render(); return false; }
 }
 
+// Click-to-move
 function onTap(ev){
   const rect=canvas.getBoundingClientRect();
   const x=(ev.clientX-rect.left)*canvas.width/rect.width;
@@ -317,23 +300,57 @@ function onTap(ev){
   else { tryMove(sq); }
 }
 canvas.addEventListener('click', onTap);
-canvas.addEventListener('touchstart', e=>{ e.preventDefault(); const t=e.changedTouches[0]; onTap(t); }, {passive:false});
 
-/* ================== Stockfish (igual que antes) ================== */
-let engine=null, lastAnalyzeAt=0;
+// Drag & drop
+function evtPos(e){ const r=canvas.getBoundingClientRect(); const c=(e.touches?e.touches[0]:e); return {x:(c.clientX-r.left)*canvas.width/r.width, y:(c.clientY-r.top)*canvas.height/r.height}; }
+function onDown(e){
+  const {x,y}=evtPos(e); const sq=xyToSq(x,y); if(!sq) return;
+  const fen=currentFen(); const pieceChar=getPieceCharAtFen(fen,sq);
+  if(!pieceChar) return;
+  const side=sideToMoveFen(fen); const isWhite=/[A-Z]/.test(pieceChar);
+  if((side==='w' && !isWhite) || (side==='b' && isWhite)) return;
+
+  const c=sq.charCodeAt(0)-97, r=8-Number(sq[1]);
+  selSq=sq; selMoves=legalTargetsFromFen(fen,sq);
+  dragging={from:sq, fromRow:r, fromCol:c, ch:pieceChar, x, y};
+  drawBoard(currentFenPieces(), dragging);
+  e.preventDefault();
+}
+function onMove(e){
+  if(!dragging) return;
+  const {x,y}=evtPos(e); dragging.x=x; dragging.y=y;
+  drawBoard(currentFenPieces(), dragging);
+  e.preventDefault();
+}
+function onUp(e){
+  if(!dragging) return;
+  const {x,y}=evtPos(e);
+  const drop=xyToSq(x,y);
+  const from=dragging.from;
+  dragging=null;
+  if(drop && drop!==from) { tryMove(drop, from); }
+  else { selSq=null; selMoves=[]; render(); }
+  e.preventDefault();
+}
+canvas.addEventListener('mousedown', onDown);
+canvas.addEventListener('mousemove', onMove);
+window.addEventListener('mouseup', onUp);
+canvas.addEventListener('touchstart', onDown, {passive:false});
+canvas.addEventListener('touchmove', onMove, {passive:false});
+canvas.addEventListener('touchend', onUp, {passive:false});
+
+/* ================== Stockfish ================== */
+let engine=null,lastAnalyzeAt=0, analyzing=false, latest={depth:0,pv:{}};
 const MIRRORS=[
   'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.js',
   'https://raw.githubusercontent.com/niklasf/stockfish.js/gh-pages/src/stockfish.js'
 ];
 function ensureEngine(){
   if(engine) return engine;
-  const code=`self.onerror=function(){};let ok=false;const urls=${JSON.stringify(MIRRORS)};(async()=>{for(const u of urls){try{importScripts(u);ok=true;postMessage({type:'_loaded',src:u});break}catch(e){}}if(!ok)postMessage({type:'sf-error',msg:'Mirrors fallaron'});})();`;
-  engine=new Worker(URL.createObjectURL(new Blob([code],{type:'application/javascript'})));
-  engine.onmessage = onEngineMsg;
-  return engine;
+  const boot=`self.onerror=function(){};let ok=false;const urls=${JSON.stringify(MIRRORS)};(async()=>{for(const u of urls){try{importScripts(u);ok=true;postMessage({type:'_loaded',src:u});break}catch(e){}}if(!ok)postMessage({type:'sf-error',msg:'Mirrors fallaron'});})();`;
+  engine=new Worker(URL.createObjectURL(new Blob([boot],{type:'application/javascript'})));
+  engine.onmessage=onEngineMsg; return engine;
 }
-let latest={depth:0,pv:{}};
-let analyzing=false;
 function resetLatest(){ latest={depth:0,pv:{}}; }
 function onEngineMsg(e){
   const d=typeof e.data==='string'? e.data : e.data;
@@ -341,11 +358,10 @@ function onEngineMsg(e){
   const line=typeof d==='string'? d : '';
   if(!line) return;
   if(line.startsWith('info ')){
-    const depth = getNum(line,/\bdepth\s+(\d+)/); if(depth) latest.depth=Math.max(latest.depth,depth);
+    const depth=getNum(line,/\bdepth\s+(\d+)/); if(depth) latest.depth=Math.max(latest.depth,depth);
     const multipv=getNum(line,/\bmultipv\s+(\d+)/)||1;
     const cp=getNum(line,/\bcp\s+(-?\d+)/); const mate=getNum(line,/\bmate\s+(-?\d+)/);
-    const pv=(line.match(/\bpv\s+(.+)/)||[])[1]||'';
-    const score=(mate!=null)?{mate}:{cp};
+    const pv=(line.match(/\bpv\s+(.+)/)||[])[1]||''; const score=(mate!=null)?{mate}:{cp};
     if(pv){ latest.pv[multipv]={pv,score}; refreshEvalPanel(); }
   }
   if(line.startsWith('bestmove')) analyzing=false;
@@ -357,19 +373,18 @@ function updateEvalBar(sc){ let cp=sc.mate!=null?(sc.mate>0?1000:-1000):(sc.cp??
 function pvUciToSAN(fen,uci){ const ch=new Chess(); ch.load(fen); const ms=uci.trim().split(/\s+/); const out=[]; for(const u of ms){ const from=u.slice(0,2),to=u.slice(2,4),prom=u[4]; const m=ch.moves({verbose:true}).find(x=>x.from===from&&x.to===to&&(!prom||x.promotion===prom)); if(!m) break; out.push(m.san); ch.move(m);} return out.join(' '); }
 function firstMoveFromUci(uci){ const m=uci.trim().split(/\s+/)[0]||''; return {from:m.slice(0,2),to:m.slice(2,4)}; }
 function refreshEvalPanel(){
-  const pv1=latest.pv[1], pv2=latest.pv[2]; const fen=frames[idx]||game.fen(); let text='';
-  lastArrows=[];
+  const pv1=latest.pv[1], pv2=latest.pv[2]; const fen=currentFen(); let text=''; lastArrows=[];
   if(pv1){ const san1=pvUciToSAN(fen,pv1.pv); text+=`① ${san1}\n`; updateEvalBar(pv1.score); showEval(scoreToEvalText(pv1.score),latest.depth,(san1.split(' ')[0]||'—')); const m1=firstMoveFromUci(pv1.pv); if(m1.from) lastArrows.push(m1); }
   if(pv2){ const san2=pvUciToSAN(fen,pv2.pv); text+=`② ${san2}\n`; const m2=firstMoveFromUci(pv2.pv); if(m2.from) lastArrows.push(m2); }
   document.getElementById('pvBox').textContent=text||'Pensando…'; render();
 }
 function showEval(ev,depth,best){ document.getElementById('evalBox').textContent=`Eval: ${ev} | Profundidad: ${depth||'—'} | Mejor jugada: ${best||'—'}`; }
 function triggerAnalyze(){
-  const now=performance.now(); if(now-lastAnalyzeAt<800) return; lastAnalyzeAt=now;
+  const now=performance.now(); if(now-lastAnalyzeAt<900) return; lastAnalyzeAt=now;
   ensureEngine(); analyzing=true; resetLatest();
   const depth=+document.getElementById('depthSel').value||16;
   const mpv=+document.getElementById('linesSel').value||2;
-  const fen=frames[idx]||game.fen();
+  const fen=currentFen();
   document.getElementById('pvBox').textContent='Pensando…';
   engine.postMessage('uci'); engine.postMessage('isready'); engine.postMessage('ucinewgame');
   engine.postMessage(`setoption name MultiPV value ${mpv}`);
@@ -379,12 +394,7 @@ document.getElementById('analyzeBtn').onclick=()=>triggerAnalyze();
 document.getElementById('stopBtn').onclick=()=>{ if(engine) engine.postMessage('stop'); analyzing=false; };
 
 /* ================== Init ================== */
-window.addEventListener('load', ()=>{
-  if(initGame()){
-    render();
-    loadPGNFromText(document.getElementById('pgnText').value);
-  }
-});
+window.addEventListener('load', ()=>{ if(initGame()){ render(); }});
 </script>
 </body>
 </html>
