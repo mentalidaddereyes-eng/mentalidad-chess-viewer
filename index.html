@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Visor PGN — tablero interactivo + análisis</title>
+<title>Visor PGN — Tablero interactivo + análisis</title>
 
 <!-- Reglas y parsing de ajedrez -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
@@ -11,8 +11,10 @@
 <style>
   :root{
     --bg:#0c1422; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#9fb0c3;
-    --sq-light:#e8f3e5; --sq-dark:#69a24a;
+    --sq-light:#e8f3e5; --sq-dark:#69a24a;          /* valores por defecto (Niños) */
     --btn:#24324a; --btnbd:#3b4a63; --btnh:#2b3f5e; --ok:#22c55e;
+    --hl-last: rgba(255, 225, 0, .28);
+    --hl-best: rgba(28, 199, 86, .20);
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.4 Inter,system-ui,Segoe UI,Roboto,Arial}
@@ -22,9 +24,9 @@
   @media (max-width:980px){.grid{grid-template-columns:1fr}}
   .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
 
-  /* Tablero */
+  /* Canvas tablero */
   #canvasBox{width:100%;max-width:720px;margin:auto}
-  canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent}
+  canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent;outline:none}
   .status{margin-top:6px;color:var(--ok);font-size:14px}
 
   /* Controles */
@@ -36,18 +38,19 @@
   .chip{padding:6px 10px;border-radius:8px;border:1px solid var(--borde);background:#0b1627}
   input,select,textarea{font:inherit}
   input[type="number"]{width:92px;background:#0b1627;border:1px solid var(--borde);border-radius:8px;padding:8px;color:var(--txt)}
+  textarea{width:100%;min-height:150px;background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px;color:var(--txt);resize:vertical;white-space:pre-wrap}
   .box{background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
   .note{color:var(--muted);font-size:14px}
   .bar{height:6px;border-radius:999px;background:#122034;overflow:hidden}
   .bar > i{display:block;height:100%;background:linear-gradient(90deg,#2dd4bf,#22c55e);width:0%}
 
-  /* Botón único para abrir PGN */
+  /* Botón de archivo PGN */
   #file{display:none}
   label[for="file"]{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
   label[for="file"]::before{content:"📂"}
 
-  /* Selector de partida (si hay varias) */
+  /* Selector de partidas múltiples */
   #gamePicker{display:none;margin-top:6px}
 
   /* Modal de promoción */
@@ -56,6 +59,13 @@
   #promo .card h3{margin:0 0 8px 0;font-size:16px}
   #promo .choices{display:flex;gap:8px}
   #promo button{font-size:24px;padding:8px 12px}
+
+  /* Modo niños/adultos (cambia colores de casillas) */
+  body.kids { --sq-light:#e8f3e5; --sq-dark:#69a24a; }
+  body.adult{ --sq-light:#f0d9b5; --sq-dark:#b58863; }
+  body.kids .mono { font-size: 15px; }
+  body.kids button { transform: translateZ(0); transition: transform .05s; }
+  body.kids button:active { transform: scale(0.98); }
 </style>
 </head>
 <body>
@@ -64,7 +74,7 @@
   <div class="wrap grid">
     <!-- IZQUIERDA -->
     <div class="panel">
-      <div id="canvasBox"><canvas id="board" width="720" height="720"></canvas></div>
+      <div id="canvasBox"><canvas id="board" width="720" height="720" tabindex="0"></canvas></div>
 
       <div class="row" style="margin-top:10px">
         <button id="prevBtn" class="ghost">← Anterior</button>
@@ -75,11 +85,20 @@
         <label class="chip"><input id="auto" type="checkbox" checked> Auto-analizar</label>
       </div>
 
-      <div id="status" class="status">OK: tablero listo. Click o arrastra para mover.</div>
+      <div id="status" class="status">OK: tablero listo. Arrastra o haz click-click para mover.</div>
     </div>
 
     <!-- DERECHA -->
     <div class="panel">
+      <div class="row" style="margin-bottom:8px">
+        <label class="chip">Modo:
+          <select id="modeSel">
+            <option value="kids">Niños</option>
+            <option value="adult">Adultos</option>
+          </select>
+        </label>
+      </div>
+
       <div class="row">
         <label for="file" class="primary">Abrir PGN</label>
         <input id="file" type="file" accept=".pgn,.txt">
@@ -132,11 +151,11 @@
   </div>
 
 <script>
-/* ============ Tablero + reglas (Chess.js) ============ */
+/* =================== Variables base =================== */
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d', {alpha:true});
 const SIZE = 720, S = SIZE/8;
-const COLORS = { light:getCss('--sq-light'), dark:getCss('--sq-dark') };
+const COLORS = () => ({ light:getCss('--sq-light'), dark:getCss('--sq-dark') });
 const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
 function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
@@ -144,18 +163,47 @@ let game = new Chess();
 let frames = [game.fen()], idx = 0;
 let playing=false, timer=null;
 let selSquare=null, drag=null;
+let lastMove = null;         // {from:'e2', to:'e4'}
+let bestArrow = null;        // {from:'e2', to:'e4'}
 
-function drawBoard(fenPieces, highlight=null){
+/* =================== Modo Niños / Adultos =================== */
+const modeSel = document.getElementById('modeSel');
+function statusMessage(txt){ document.getElementById('status').textContent = txt; }
+
+function applyMode(mode) {
+  document.body.classList.remove('kids','adult');
+  document.body.classList.add(mode);
+  if (mode === 'kids') {
+    statusMessage('¡Listo para jugar! 🌟 Arrastra o toca para mover.');
+  } else {
+    statusMessage('Tablero listo. Arrastra o haz click-click para mover.');
+  }
+  render();
+}
+modeSel.addEventListener('change', ()=> applyMode(modeSel.value));
+applyMode('kids');
+
+/* =================== Dibujo tablero =================== */
+function drawBoard(fenPieces){
+  const C = COLORS();
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
       const light = (r+c)%2===0;
-      ctx.fillStyle = light? COLORS.light : COLORS.dark;
+      ctx.fillStyle = light? C.light : C.dark;
       ctx.fillRect(c*S, r*S, S, S);
-      if(highlight && highlight.r===r && highlight.c===c){
-        ctx.fillStyle = 'rgba(255,255,0,.18)'; ctx.fillRect(c*S, r*S, S, S);
-      }
     }
   }
+
+  // Resaltado último movimiento
+  if (lastMove) {
+    const a = algebraicToRC(lastMove.from);
+    const b = algebraicToRC(lastMove.to);
+    ctx.fillStyle = getCss('--hl-last');
+    ctx.fillRect(a.c*S, a.r*S, S, S);
+    ctx.fillRect(b.c*S, b.r*S, S, S);
+  }
+
+  // Piezas
   const rows = fenPieces.split('/');
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.font = `${S*0.74}px "Segoe UI Symbol","Noto Color Emoji","Apple Color Emoji",serif`;
@@ -166,7 +214,6 @@ function drawBoard(fenPieces, highlight=null){
       else{
         const x=(file+0.5)*S, y=(r+0.5)*S;
         const lightSq = (r+file)%2===0;
-        /* Borde + sombra para no “perder” piezas en casillas claras */
         ctx.lineWidth = S*0.06;
         ctx.strokeStyle = lightSq? 'rgba(0,0,0,.85)' : 'rgba(255,255,255,.9)';
         ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = S*0.05;
@@ -178,6 +225,11 @@ function drawBoard(fenPieces, highlight=null){
       }
     }
   }
+
+  // Flecha de mejor jugada
+  if (bestArrow) drawArrow(bestArrow.from, bestArrow.to, 'rgba(28,199,86,.9)');
+
+  // Pieza arrastrada encima
   if(drag){
     const {piece,x,y} = drag;
     ctx.lineWidth = S*0.06; ctx.strokeStyle='rgba(0,0,0,.85)';
@@ -187,30 +239,55 @@ function drawBoard(fenPieces, highlight=null){
     ctx.fillText(GLYPH[piece]||'', x, y);
   }
 }
-function render(){ drawBoard((frames[idx]||game.fen()).split(' ')[0]); setStatus(`Posición ${idx}/${frames.length-1}`); }
-function setStatus(t){ document.getElementById('status').textContent=t; }
+
+function drawArrow(fromSq, toSq, color) {
+  const a = algebraicToRC(fromSq);
+  const b = algebraicToRC(toSq);
+  const from = { x: (a.c+0.5)*S, y:(a.r+0.5)*S };
+  const to   = { x: (b.c+0.5)*S, y:(b.r+0.5)*S };
+  // línea
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(4, S*0.06);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.stroke();
+  // punta
+  const ang = Math.atan2(to.y-from.y, to.x-from.x);
+  const L = Math.max(18, S*0.35);
+  ctx.beginPath();
+  ctx.moveTo(to.x, to.y);
+  ctx.lineTo(to.x - L*Math.cos(ang - Math.PI/6), to.y - L*Math.sin(ang - Math.PI/6));
+  ctx.lineTo(to.x - L*Math.cos(ang + Math.PI/6), to.y - L*Math.sin(ang + Math.PI/6));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function render(){
+  drawBoard((frames[idx]||game.fen()).split(' ')[0]);
+  statusMessage(`Posición ${idx}/${frames.length-1}`);
+}
 
 function algebraicToRC(sq){ return {c: sq.charCodeAt(0)-97, r: 8-parseInt(sq[1],10)} }
 function rcToAlgebraic(r,c){ return String.fromCharCode(97+c)+(8-r) }
 function eventToSquare(ev){
   const rect = canvas.getBoundingClientRect();
-  const clientX = (ev.touches?ev.touches[0].clientX:ev.clientX);
-  const clientY = (ev.touches?ev.touches[0].clientY:ev.clientY);
-  const x = clientX - rect.left;
-  const y = clientY - rect.top;
-  const size = Math.min(rect.width, rect.height); // asegura cálculo
-  const c = Math.min(7, Math.max(0, Math.floor(x/size*8)));
-  const r = Math.min(7, Math.max(0, Math.floor(y/size*8)));
-  return {r,c, x:x/size*SIZE, y:y/size*SIZE};
+  const x = (ev.touches?ev.touches[0].clientX:ev.clientX) - rect.left;
+  const y = (ev.touches?ev.touches[0].clientY:ev.clientY) - rect.top;
+  const c = Math.min(7, Math.max(0, Math.floor(x/rect.width*8)));
+  const r = Math.min(7, Math.max(0, Math.floor(y/rect.width*8)));
+  return {r,c, x:x/rect.width*SIZE, y:y/rect.width*SIZE};
 }
 
-/* mover (drag & drop + click-click) con promoción */
+/* =================== Mover: drag & drop + click-click con promoción =================== */
 canvas.addEventListener('mousedown', e=>{
   const q=eventToSquare(e), sq=rcToAlgebraic(q.r,q.c), piece=game.get(sq);
-  if(piece){ selSquare=sq; drag={from:sq, piece:(piece.color==='w'?piece.type.toUpperCase():piece.type), x:q.x,y:q.y}; drawBoard(game.fen().split(' ')[0], {r:q.r,c:q.c}); }
+  if(piece){ selSquare=sq; drag={from:sq, piece:(piece.color==='w'?piece.type.toUpperCase():piece.type), x:q.x,y:q.y}; render(); }
   else selSquare=null;
 });
-canvas.addEventListener('mousemove', e=>{ if(!drag) return; const q=eventToSquare(e); drag.x=q.x; drag.y=q.y; drawBoard(game.fen().split(' ')[0]); });
+canvas.addEventListener('mousemove', e=>{ if(!drag) return; const q=eventToSquare(e); drag.x=q.x; drag.y=q.y; render(); });
 canvas.addEventListener('mouseup', e=>{ if(!drag) return; const q=eventToSquare(e); finishMove(drag.from, rcToAlgebraic(q.r,q.c)); drag=null; });
 canvas.addEventListener('mouseleave', ()=>{ if(drag){ drag=null; render(); }});
 canvas.addEventListener('touchstart', e=>{ e.preventDefault(); canvas.dispatchEvent(new MouseEvent('mousedown',{clientX:e.touches[0].clientX, clientY:e.touches[0].clientY})); },{passive:false});
@@ -228,18 +305,7 @@ function needsPromotion(from,to){
   if(!p || p.type!=='p') return false;
   return (p.color==='w' && to[1]==='8') || (p.color==='b' && to[1]==='1');
 }
-function finishMove(from,to){
-  if(needsPromotion(from,to)){ openPromotion(piece=> tryPerform(from,to,piece)); return; }
-  tryPerform(from,to);
-}
-function tryPerform(from,to,promo){
-  const mv = game.move({from,to,promotion: promo||'q'});
-  if(!mv){ setStatus('Movimiento ilegal'); render(); return; }
-  frames.push(game.fen()); idx=frames.length-1; render(); updateMovesSAN();
-  if(document.getElementById('auto').checked) scheduleAnalysis();
-}
 
-/* promoción UI */
 const promo = document.getElementById('promo');
 function openPromotion(cb){
   promo.style.display='flex';
@@ -253,39 +319,104 @@ function openPromotion(cb){
   promo.addEventListener('click', handler);
 }
 
-/* Controles reproducción */
-function updateMovesSAN(){
-  const san = game.history();
-  document.getElementById('movesBox').textContent =
-    san.map((m,i)=>(i%2===0? (Math.floor(i/2)+1)+'. ':'')+m).join(' ');
-  document.getElementById('gameInfo').textContent = `Movidas: ${san.length}`;
+function finishMove(from,to){
+  if(needsPromotion(from,to)){ openPromotion(piece=>{ tryPerform(from,to,piece); }); return; }
+  tryPerform(from,to);
 }
-prevBtn.onclick = ()=>{ if(idx>0){ idx--; game.load(frames[idx]); render(); if(auto.checked) scheduleAnalysis(); } };
-nextBtn.onclick = ()=>{ if(idx<frames.length-1){ idx++; game.load(frames[idx]); render(); if(auto.checked) scheduleAnalysis(); } };
-resetBtn.onclick = ()=>{ idx=0; game.load(frames[0]); render(); if(auto.checked) scheduleAnalysis(); };
+
+function tryPerform(from,to,promoPiece){
+  const mv = game.move({from,to,promotion: promoPiece||'q'});
+  if(!mv){ statusMessage(modeSel.value==='kids' ? '¡Esa no vale! 🚫' : 'Movimiento ilegal'); render(); return; }
+  lastMove = {from: mv.from, to: mv.to};
+  bestArrow = null;                          // limpiar recomendación previa
+  frames.push(game.fen()); idx=frames.length-1; render(); updateMovesSAN();
+  if(document.getElementById('auto').checked) scheduleAnalysis();
+}
+
+/* =================== Controles de reproducción =================== */
+prevBtn.onclick = ()=>{ 
+  if(idx>0){ 
+    idx--; game.load(frames[idx]); 
+    lastMove = rebuildLastMove(idx); 
+    render(); 
+    if(auto.checked) scheduleAnalysis(); 
+  } 
+};
+nextBtn.onclick = ()=>{ 
+  if(idx<frames.length-1){ 
+    idx++; game.load(frames[idx]); 
+    lastMove = rebuildLastMove(idx); 
+    render(); 
+    if(auto.checked) scheduleAnalysis(); 
+  } 
+};
+resetBtn.onclick = ()=>{ 
+  idx=0; game.load(frames[0]); 
+  lastMove=null; bestArrow=null; 
+  render(); if(auto.checked) scheduleAnalysis(); 
+};
 playBtn.onclick = ()=>{
   if(playing){ clearInterval(timer); playing=false; playBtn.textContent='▶ Play'; return; }
   playing=true; playBtn.textContent='⏸ Pausa';
   const ms=Math.max(100,+speed.value||800);
-  timer=setInterval(()=>{ if(idx<frames.length-1){ idx++; game.load(frames[idx]); render(); if(auto.checked) scheduleAnalysis(); } else { clearInterval(timer); playing=false; playBtn.textContent='▶ Play'; } }, ms);
+  timer=setInterval(()=>{ 
+    if(idx<frames.length-1){ 
+      idx++; game.load(frames[idx]); 
+      lastMove = rebuildLastMove(idx); 
+      render(); if(auto.checked) scheduleAnalysis(); 
+    } else { clearInterval(timer); playing=false; playBtn.textContent='▶ Play'; } 
+  }, ms);
 };
 
-/* ============ Importación PGN (un botón + robusto) ============ */
+function rebuildLastMove(k){
+  if(k<=0) return null;
+  const san = getSANHistory(frames);
+  const g3 = new Chess(); let prev=null;
+  for(let i=0;i<k;i++){ prev = g3.move(san[i]); }
+  return prev ? {from:prev.from,to:prev.to}:null;
+}
+
+function getSANHistory(fens){
+  // reconstruye la lista SAN a partir de frames (más fiable usar la partida actual)
+  const g=new Chess(); const hist=game.history(); // ya la tenemos
+  return hist;
+}
+
+/* =================== Importar PGN =================== */
+const file = document.getElementById('file');
+const loadTextBtn = document.getElementById('loadTextBtn');
+const pgnText = document.getElementById('pgnText');
+
 file.onchange = async ()=>{
   const f = file.files?.[0]; if(!f) return;
   const txt = await f.text();
-  importPGNCollection(txt);   // carga automática
+  importPGNCollection(txt);
 };
 loadTextBtn.onclick = ()=> importPGNCollection(pgnText.value);
 
+// Drag & Drop sobre el canvas
+['dragenter','dragover'].forEach(ev=>{
+  canvas.addEventListener(ev, e=>{ e.preventDefault(); canvas.style.outline='3px dashed #69a24a'; });
+});
+['dragleave','drop'].forEach(ev=>{
+  canvas.addEventListener(ev, e=>{ e.preventDefault(); canvas.style.outline='none'; });
+});
+canvas.addEventListener('drop', async (e)=>{
+  const f = e.dataTransfer.files?.[0];
+  if(!f) return;
+  if(!/\.pgn|\.txt$/i.test(f.name)){ alert('Arrastra un archivo .pgn o .txt'); return; }
+  const txt = await f.text();
+  importPGNCollection(txt);
+});
+
 function cleanPGN(txt){
   return txt
-    .replace(/^\uFEFF/, '')
-    .replace(/\r\n?/g, '\n')
-    .replace(/\$\d+/g,'')             // NAGs
-    .replace(/\{[^}]*\}/g,'')         // {comentarios}
-    .replace(/\([^()]*\)/g,'')        // variantes simples
-    .replace(/\n{3,}/g,'\n\n')
+    .replace(/^\uFEFF/, '')           // BOM
+    .replace(/\r\n?/g, '\n')          // saltos
+    .replace(/\$\d+/g,'')             // NAGs $1, $2…
+    .replace(/\{[^}]*\}/g,'')         // comentarios {...}
+    .replace(/\([^()]*\)/g,'')        // variantes simples (una capa)
+    .replace(/\n{3,}/g,'\n\n')        // demasiados blancos
     .trim();
 }
 function splitGames(raw){
@@ -308,6 +439,7 @@ function gameTitle(pgn){
   const b = (pgn.match(/\[Black\s*"([^"]*)"\]/)||[])[1]||'';
   return `${e} — ${w} vs ${b} ${d?('('+d+')'):''}`.trim();
 }
+
 function importPGNCollection(raw){
   const games = splitGames(raw);
   if(!games.length){ alert('No se encontraron partidas en el archivo.'); return; }
@@ -321,7 +453,7 @@ function importPGNCollection(raw){
   document.getElementById('gameCount').textContent = games.length>1 ? `(${games.length})` : '';
   document.getElementById('gamePicker').style.display = games.length>1 ? 'flex' : 'none';
   sel.onchange = ()=> loadPGN(games[+sel.value], true);
-  loadPGN(games[0], true); // carga automática de la primera
+  loadPGN(games[0], true);
 }
 
 function loadPGN(pgn, reset=true){
@@ -329,27 +461,61 @@ function loadPGN(pgn, reset=true){
   if(!ok){ alert('PGN inválido.'); return false; }
   const san = game.history();
   game.reset(); frames=[game.fen()];
-  for(const mv of san){ game.move(mv); frames.push(game.fen()); }
-  idx=0; render(); updateMovesSAN();
+  let mv=null;
+  for(const m of san){ mv = game.move(m); frames.push(game.fen()); }
+  idx=frames.length-1; lastMove = mv? {from:mv.from,to:mv.to}:null; bestArrow=null;
+  render(); updateMovesSAN();
   if(auto.checked) scheduleAnalysis();
-  if(reset){ setStatus('Partida cargada.'); }
+  if(reset){ statusMessage('Partida cargada.'); }
   return true;
+}
+
+function updateMovesSAN(){
+  const san = game.history();
+  const movesBox = document.getElementById('movesBox');
+  movesBox.innerHTML = '';
+  const g2 = new Chess();
+  const fens = [g2.fen()];
+  san.forEach(m=>{ g2.move(m); fens.push(g2.fen()); });
+
+  san.forEach((m,i)=>{
+    if(i%2===0){
+      const turn=document.createElement('span');
+      turn.className='note';
+      turn.textContent = (Math.floor(i/2)+1)+'. ';
+      movesBox.appendChild(turn);
+    }
+    const sp = document.createElement('span');
+    sp.textContent = m+' ';
+    sp.style.cursor = 'pointer';
+    sp.onclick = ()=>{
+      idx = i+1; 
+      game.load(fens[idx]);
+      const g3=new Chess(); let prev=null; 
+      for(let k=0;k<=i;k++){ prev = g3.move(san[k]); }
+      lastMove = prev ? {from:prev.from,to:prev.to} : null;
+      bestArrow=null;
+      render();
+      if(document.getElementById('auto').checked) scheduleAnalysis();
+    };
+    movesBox.appendChild(sp);
+  });
+  document.getElementById('gameInfo').textContent = `Movidas: ${san.length}`;
 }
 
 copyFenBtn.onclick = async ()=>{
   const fen = frames[idx] || game.fen();
   await navigator.clipboard.writeText(fen);
-  setStatus('FEN copiado al portapapeles.');
+  statusMessage(modeSel.value==='kids' ? '¡FEN copiado! 📋' : 'FEN copiado al portapapeles.');
 };
 
-/* ============ Stockfish (mirrors + UI lenta/legible) ============ */
+/* =================== Stockfish (CDNJS) =================== */
 let engine=null, engineReady=false, lastDepth=0, lastBest='';
-let lastUiTs=0;
-const UI_MIN_MS = 400; // refresco máx. cada 0.4s
 const MIRRORS = [
   'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.js'
 ];
+
 function ensureEngine(){
   if(engine) return engine;
   const code = `
@@ -363,6 +529,14 @@ function ensureEngine(){
   engine.onmessage = onEngineMessage;
   return engine;
 }
+
+let lastUiUpdate = 0;
+function canUpdateUi(){
+  const now = performance.now();
+  if (now - lastUiUpdate > 350) { lastUiUpdate = now; return true; }
+  return false;
+}
+
 function onEngineMessage(e){
   const d=e.data;
   if(d?.type==='sf-ok'){ engineReady=true; document.getElementById('engineSrc').textContent=` (motor: ${d.src})`; return; }
@@ -371,24 +545,34 @@ function onEngineMessage(e){
   if(!line || !line.startsWith('info ')) return;
 
   const depth = +(line.match(/\bdepth\s+(\d+)/)||[])[1] || lastDepth;
-  if(depth < lastDepth) return; // no “rebobinar” profundidad
-  const now = performance.now();
-  if(now - lastUiTs < UI_MIN_MS && depth === lastDepth) return; // throttle
-
   const cp    = (line.match(/\bcp\s+(-?\d+)/)||[])[1];
   const mate  = (line.match(/\bmate\s+(-?\d+)/)||[])[1];
   const pv    = (line.match(/\bpv\s+(.+)/)||[])[1] || '';
+  if(depth<lastDepth) return;
+  if(!canUpdateUi()) return;
 
-  lastDepth = depth; lastUiTs = now;
+  lastDepth = depth;
   const evalTxt = mate ? ('#'+mate) : (cp? (Number(cp)/100).toFixed(2) : '—');
   const best = pv.split(' ')[0]||'—';
-  if(best!==lastBest) lastBest=best;
-  showEval(evalTxt, depth, uciToNice(best));
+
+  // Mensaje más humano según modo
+  const human = niceEvalText(evalTxt);
+  showEval(human, depth, uciToNice(best));
   showPV(pv);
 
+  // barra de profundidad
   const dMax = Math.max(6, Math.min(30, +maxDepth.value||18));
   document.getElementById('depthBar').style.width = `${Math.min(100, Math.round(depth/dMax*100))}%`;
+
+  // flecha de mejor jugada
+  if (best && best.length>=4) {
+    const from = best.slice(0,2);
+    const to   = best.slice(2,4);
+    bestArrow = {from, to};
+    render();
+  }
 }
+
 function uciToNice(uci){
   if(!uci || uci==='—') return '—';
   const figurines={p:'',n:'♘',b:'♗',r:'♖',q:'♕',k:'♔'};
@@ -398,27 +582,43 @@ function uciToNice(uci){
   const promoFig = promo ? '='+({q:'♕',r:'♖',b:'♗',n:'♘'}[promo]||promo.toUpperCase()) : '';
   return fig+from+'–'+to+promoFig;
 }
+
+function niceEvalText(evalTxt){
+  if (modeSel.value==='kids') {
+    if (evalTxt==='—') return 'Pensando… 🤔';
+    if (evalTxt.startsWith('#')) return '¡Mate a la vista! 🏁';
+    const val = Number(evalTxt);
+    if (val >= 1.5) return '¡Ventaja grande! 😄';
+    if (val >= 0.4) return 'Un poco mejor 🙂';
+    if (val > -0.4) return 'Igualado 😐';
+    if (val > -1.5) return 'Cuidadito 🙁';
+    return 'Posición difícil 😟';
+  }
+  return evalTxt; // adultos literal
+}
+
 function showEval(ev,depth,best){
   const box=document.getElementById('evalBox');
   box.textContent = `Eval: ${ev} | Profundidad: ${depth} | Mejor jugada: ${best} `;
   const src=document.createElement('span'); src.id='engineSrc'; src.className='note';
   box.appendChild(src);
 }
+
 function showPV(pv){
   const toks=pv.trim().split(/\s+/).slice(0,80);
   const out=toks.map(uciToNice).join(' ');
   document.getElementById('pvBox').textContent = out || '—';
 }
+
 let debTimer=null;
 function scheduleAnalysis(){ clearTimeout(debTimer); debTimer=setTimeout(runAnalysis, 500); }
 function runAnalysis(){
   ensureEngine(); if(!engine) return;
-  lastDepth=0; lastBest=''; lastUiTs=0;
+  lastDepth=0; lastBest='';
   const depth = Math.max(6, Math.min(30, +maxDepth.value||18));
   const multi = Math.max(1, Math.min(3, +multipv.value||1));
   const fen = frames[idx] || game.fen();
   showEval('…','—','—'); showPV('Pensando…');
-  engine.postMessage('stop');              // evita solapar búsquedas
   engine.postMessage('uci');
   engine.postMessage('setoption name MultiPV value '+multi);
   engine.postMessage('isready');
@@ -429,8 +629,10 @@ function runAnalysis(){
 goBtn.onclick = runAnalysis;
 stopBtn.onclick = ()=>{ if(engine) engine.postMessage('stop'); };
 
-/* init */
-window.addEventListener('load', ()=>{ frames=[game.fen()]; idx=0; render(); updateMovesSAN(); });
+/* =================== Init =================== */
+window.addEventListener('load', ()=>{
+  frames=[game.fen()]; idx=0; render(); updateMovesSAN();
+});
 </script>
 </body>
 </html>
