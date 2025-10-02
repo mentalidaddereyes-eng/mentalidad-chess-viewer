@@ -22,10 +22,12 @@
   @media (max-width:980px){.grid{grid-template-columns:1fr}}
   .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
 
+  /* Tablero */
   #canvasBox{width:100%;max-width:720px;margin:auto}
   canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent}
   .status{margin-top:6px;color:var(--ok);font-size:14px}
 
+  /* Controles */
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   button{background:var(--btn);border:1px solid var(--btnbd);color:var(--txt);border-radius:10px;padding:9px 13px;cursor:pointer}
   button:hover{background:var(--btnh)}
@@ -40,12 +42,12 @@
   .bar{height:6px;border-radius:999px;background:#122034;overflow:hidden}
   .bar > i{display:block;height:100%;background:linear-gradient(90deg,#2dd4bf,#22c55e);width:0%}
 
-  /* Botón único para abrir PGN (disfraza al input file) */
+  /* Botón único para abrir PGN */
   #file{display:none}
   label[for="file"]{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
   label[for="file"]::before{content:"📂"}
 
-  /* Selector de partida (solo si hay varias) */
+  /* Selector de partida (si hay varias) */
   #gamePicker{display:none;margin-top:6px}
 
   /* Modal de promoción */
@@ -164,6 +166,7 @@ function drawBoard(fenPieces, highlight=null){
       else{
         const x=(file+0.5)*S, y=(r+0.5)*S;
         const lightSq = (r+file)%2===0;
+        /* Borde + sombra para no “perder” piezas en casillas claras */
         ctx.lineWidth = S*0.06;
         ctx.strokeStyle = lightSq? 'rgba(0,0,0,.85)' : 'rgba(255,255,255,.9)';
         ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = S*0.05;
@@ -191,11 +194,14 @@ function algebraicToRC(sq){ return {c: sq.charCodeAt(0)-97, r: 8-parseInt(sq[1],
 function rcToAlgebraic(r,c){ return String.fromCharCode(97+c)+(8-r) }
 function eventToSquare(ev){
   const rect = canvas.getBoundingClientRect();
-  const x = (ev.touches?ev.touches[0].clientX:ev.clientX) - rect.left;
-  const y = (ev.touches?ev.touches[0].clientY:ev.clientY) - rect.top;
-  const c = Math.min(7, Math.max(0, Math.floor(x/rect.width*8)));
-  const r = Math.min(7, Math.max(0, Math.floor(y/rect.width*8)));
-  return {r,c, x:x/rect.width*SIZE, y:y/rect.width*SIZE};
+  const clientX = (ev.touches?ev.touches[0].clientX:ev.clientX);
+  const clientY = (ev.touches?ev.touches[0].clientY:ev.clientY);
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  const size = Math.min(rect.width, rect.height); // asegura cálculo
+  const c = Math.min(7, Math.max(0, Math.floor(x/size*8)));
+  const r = Math.min(7, Math.max(0, Math.floor(y/size*8)));
+  return {r,c, x:x/size*SIZE, y:y/size*SIZE};
 }
 
 /* mover (drag & drop + click-click) con promoción */
@@ -220,14 +226,10 @@ canvas.addEventListener('click', e=>{
 function needsPromotion(from,to){
   const p = game.get(from);
   if(!p || p.type!=='p') return false;
-  const tr = 8-parseInt(to[1],10);
   return (p.color==='w' && to[1]==='8') || (p.color==='b' && to[1]==='1');
 }
 function finishMove(from,to){
-  // si requiere promoción, abrir modal
-  if(needsPromotion(from,to)){ openPromotion(piece=>{
-    tryPerform(from,to,piece);
-  }); return; }
+  if(needsPromotion(from,to)){ openPromotion(piece=> tryPerform(from,to,piece)); return; }
   tryPerform(from,to);
 }
 function tryPerform(from,to,promo){
@@ -251,7 +253,7 @@ function openPromotion(cb){
   promo.addEventListener('click', handler);
 }
 
-/* controles reproducción */
+/* Controles reproducción */
 function updateMovesSAN(){
   const san = game.history();
   document.getElementById('movesBox').textContent =
@@ -268,7 +270,7 @@ playBtn.onclick = ()=>{
   timer=setInterval(()=>{ if(idx<frames.length-1){ idx++; game.load(frames[idx]); render(); if(auto.checked) scheduleAnalysis(); } else { clearInterval(timer); playing=false; playBtn.textContent='▶ Play'; } }, ms);
 };
 
-/* ============ Importación PGN (un solo botón y robusto) ============ */
+/* ============ Importación PGN (un botón + robusto) ============ */
 file.onchange = async ()=>{
   const f = file.files?.[0]; if(!f) return;
   const txt = await f.text();
@@ -278,12 +280,12 @@ loadTextBtn.onclick = ()=> importPGNCollection(pgnText.value);
 
 function cleanPGN(txt){
   return txt
-    .replace(/^\uFEFF/, '')           // BOM
-    .replace(/\r\n?/g, '\n')          // saltos
-    .replace(/\$\d+/g,'')             // NAGs $1, $2…
-    .replace(/\{[^}]*\}/g,'')         // comentarios {...}
-    .replace(/\([^()]*\)/g,'')        // variantes simples (una capa)
-    .replace(/\n{3,}/g,'\n\n')        // demasiados blancos
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\$\d+/g,'')             // NAGs
+    .replace(/\{[^}]*\}/g,'')         // {comentarios}
+    .replace(/\([^()]*\)/g,'')        // variantes simples
+    .replace(/\n{3,}/g,'\n\n')
     .trim();
 }
 function splitGames(raw){
@@ -309,7 +311,6 @@ function gameTitle(pgn){
 function importPGNCollection(raw){
   const games = splitGames(raw);
   if(!games.length){ alert('No se encontraron partidas en el archivo.'); return; }
-  // preparar selector si hay varias
   const sel = document.getElementById('gameSelect');
   sel.innerHTML='';
   games.forEach((g,i)=>{
@@ -320,14 +321,12 @@ function importPGNCollection(raw){
   document.getElementById('gameCount').textContent = games.length>1 ? `(${games.length})` : '';
   document.getElementById('gamePicker').style.display = games.length>1 ? 'flex' : 'none';
   sel.onchange = ()=> loadPGN(games[+sel.value], true);
-  // carga automática de la primera
-  loadPGN(games[0], true);
+  loadPGN(games[0], true); // carga automática de la primera
 }
 
 function loadPGN(pgn, reset=true){
   const ok = game.load_pgn(pgn, {sloppy:true});
   if(!ok){ alert('PGN inválido.'); return false; }
-  // reconstruir frames fielmente
   const san = game.history();
   game.reset(); frames=[game.fen()];
   for(const mv of san){ game.move(mv); frames.push(game.fen()); }
@@ -343,8 +342,10 @@ copyFenBtn.onclick = async ()=>{
   setStatus('FEN copiado al portapapeles.');
 };
 
-/* ============ Stockfish (debounced y estable) ============ */
+/* ============ Stockfish (mirrors + UI lenta/legible) ============ */
 let engine=null, engineReady=false, lastDepth=0, lastBest='';
+let lastUiTs=0;
+const UI_MIN_MS = 400; // refresco máx. cada 0.4s
 const MIRRORS = [
   'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.js'
@@ -370,16 +371,21 @@ function onEngineMessage(e){
   if(!line || !line.startsWith('info ')) return;
 
   const depth = +(line.match(/\bdepth\s+(\d+)/)||[])[1] || lastDepth;
+  if(depth < lastDepth) return; // no “rebobinar” profundidad
+  const now = performance.now();
+  if(now - lastUiTs < UI_MIN_MS && depth === lastDepth) return; // throttle
+
   const cp    = (line.match(/\bcp\s+(-?\d+)/)||[])[1];
   const mate  = (line.match(/\bmate\s+(-?\d+)/)||[])[1];
   const pv    = (line.match(/\bpv\s+(.+)/)||[])[1] || '';
-  if(depth<lastDepth) return;
-  lastDepth = depth;
+
+  lastDepth = depth; lastUiTs = now;
   const evalTxt = mate ? ('#'+mate) : (cp? (Number(cp)/100).toFixed(2) : '—');
   const best = pv.split(' ')[0]||'—';
   if(best!==lastBest) lastBest=best;
   showEval(evalTxt, depth, uciToNice(best));
   showPV(pv);
+
   const dMax = Math.max(6, Math.min(30, +maxDepth.value||18));
   document.getElementById('depthBar').style.width = `${Math.min(100, Math.round(depth/dMax*100))}%`;
 }
@@ -407,11 +413,12 @@ let debTimer=null;
 function scheduleAnalysis(){ clearTimeout(debTimer); debTimer=setTimeout(runAnalysis, 500); }
 function runAnalysis(){
   ensureEngine(); if(!engine) return;
-  lastDepth=0; lastBest='';
+  lastDepth=0; lastBest=''; lastUiTs=0;
   const depth = Math.max(6, Math.min(30, +maxDepth.value||18));
   const multi = Math.max(1, Math.min(3, +multipv.value||1));
   const fen = frames[idx] || game.fen();
   showEval('…','—','—'); showPV('Pensando…');
+  engine.postMessage('stop');              // evita solapar búsquedas
   engine.postMessage('uci');
   engine.postMessage('setoption name MultiPV value '+multi);
   engine.postMessage('isready');
