@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Visor PGN — Tablero interactivo + análisis</title>
-<meta name="description" content="Visor PGN con tablero interactivo, análisis Stockfish y modos Niños/Adultos. Sube tu partida y aprende jugando.">
+<meta name="description" content="Visor PGN con tablero interactivo, análisis Stockfish y modos Niños/Adultos. Responsive para móvil y desktop.">
 
 <!-- Reglas (chess.js) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
@@ -12,22 +12,36 @@
 <style>
   :root{
     --bg:#0c1422; --panel:#0f1b2e; --borde:#232a36; --txt:#e6edf3; --muted:#9fb0c3;
-    --sq-light:#e8f3e5; --sq-dark:#69a24a; /* por defecto (Niños) */
+    /* Colores por modo se sobreescriben con body.kids/adult */
+    --sq-light:#e8f3e5; --sq-dark:#69a24a;
     --btn:#24324a; --btnbd:#3b4a63; --btnh:#2b3f5e; --ok:#22c55e;
     --hl-last: rgba(255,225,0,.28);
   }
   *{box-sizing:border-box}
+  html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.4 Inter,system-ui,Segoe UI,Roboto,Arial}
-  h1{max-width:1100px;margin:18px auto 6px;padding:0 16px;font-size:26px}
+
+  h1{max-width:1100px;margin:14px auto 6px;padding:0 16px;font-size:24px}
   .wrap{max-width:1100px;margin:0 auto;padding:12px 16px}
-  .grid{display:grid;grid-template-columns:1fr 380px;gap:14px}
-  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  .grid{
+    display:grid; gap:14px;
+    grid-template-columns: 1fr 380px;
+  }
+  @media (max-width: 980px){
+    .grid{ grid-template-columns: 1fr; }
+  }
   .panel{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:12px}
 
-  #canvasBox{width:100%;max-width:720px;margin:auto}
-  canvas{width:100%;height:auto;display:block;border:1px solid var(--borde);border-radius:10px;background:transparent;outline:none}
+  /* Canvas tablero: el JS ajusta tamaño real y CSS para que sea siempre cuadrado y nítido */
+  #canvasBox{width:100%; max-width:900px; margin:auto}
+  canvas{
+    width:100%; height:auto; display:block;
+    border:1px solid var(--borde); border-radius:10px; background:transparent; outline:none;
+    touch-action:none;  /* mejora arrastre en móvil */
+  }
   .status{margin-top:6px;color:var(--ok);font-size:14px}
 
+  /* Controles */
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   button{background:var(--btn);border:1px solid var(--btnbd);color:var(--txt);border-radius:10px;padding:9px 13px;cursor:pointer}
   button:hover{background:var(--btnh)}
@@ -36,7 +50,7 @@
   .chip{padding:6px 10px;border-radius:8px;border:1px solid var(--borde);background:#0b1627}
   input,select,textarea{font:inherit}
   input[type="number"]{width:92px;background:#0b1627;border:1px solid var(--borde);border-radius:8px;padding:8px;color:var(--txt)}
-  textarea{width:100%;min-height:150px;background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px;color:var(--txt);resize:vertical;white-space:pre-wrap}
+  textarea{width:100%;min-height:140px;background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px;color:var(--txt);resize:vertical;white-space:pre-wrap}
   .box{background:#0b1627;border:1px solid var(--borde);border-radius:10px;padding:10px}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}
   .note{color:var(--muted);font-size:14px}
@@ -46,21 +60,29 @@
   #file{display:none}
   label[for="file"]{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
   label[for="file"]::before{content:"📂"}
-
   #gamePicker{display:none;margin-top:6px}
 
+  /* Modal de promoción */
   #promo{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:40}
   #promo .card{background:#0f1b2e;border:1px solid var(--borde);padding:14px;border-radius:12px}
   #promo .card h3{margin:0 0 8px 0;font-size:16px}
   #promo .choices{display:flex;gap:8px}
   #promo button{font-size:24px;padding:8px 12px}
 
-  /* Modo Niños / Adultos */
+  /* Modo Niños / Adultos (colores casillas) */
   body.kids { --sq-light:#e8f3e5; --sq-dark:#69a24a; }
   body.adult{ --sq-light:#f0d9b5; --sq-dark:#b58863; }
   body.kids .mono { font-size: 15px; }
   body.kids button { transform: translateZ(0); transition: transform .05s; }
   body.kids button:active { transform: scale(0.98); }
+
+  /* Mejoras móvil: botones más grandes y espacio para dedo */
+  @media (max-width: 600px){
+    button{ padding:12px 14px; }
+    .chip{ padding:8px 12px; }
+    #canvasBox{ max-width: 100vw; }
+    h1{ font-size:20px }
+  }
 </style>
 </head>
 <body>
@@ -146,13 +168,42 @@
   </div>
 
 <script>
-/* ====== Base ====== */
+/* =================== Utilidades de layout (Responsive + Retina) =================== */
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d', {alpha:true});
-const SIZE = 720, S = SIZE/8;
+function dpr(){ return Math.max(1, Math.min(3, window.devicePixelRatio || 1)); }
+
+/* Calcula el tamaño objetivo del tablero según pantalla y UI visible */
+function targetBoardCSSpx(){
+  const box = document.getElementById('canvasBox');
+  const maxW = box.clientWidth || window.innerWidth;         // ancho disponible
+  const isNarrow = window.innerWidth <= 600;                  // móvil “estrecho”
+  // Reserva vertical para título + controles + status en móvil
+  const reservedY = isNarrow ? 360 : 260;
+  const vhRoom = Math.max(300, window.innerHeight - reservedY);
+  let size = Math.min(maxW, vhRoom);
+  // límites para no quedar mini ni gigante
+  size = Math.max(300, Math.min(size, 720));
+  return Math.round(size);
+}
+
+/* Ajusta el tamaño real del canvas a CSSpx * dpr, y repinta */
+function resizeBoard(){
+  const css = targetBoardCSSpx();
+  const scale = dpr();
+  canvas.style.width = css + 'px';
+  canvas.style.height = css + 'px';
+  canvas.width  = Math.round(css * scale);
+  canvas.height = Math.round(css * scale);
+  render();
+}
+window.addEventListener('resize', resizeBoard);
+window.addEventListener('orientationchange', resizeBoard);
+
+/* =================== Base ajedrez =================== */
 const GLYPH = {'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔','p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'};
 function CSS(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
-const COLORS = ()=>({ light:CSS('--sq-light'), dark:CSS('--sq-dark') });
+function S(){ return canvas.width / 8; } // tamaño de casilla en píxeles reales
 
 let game = new Chess();
 let frames = [game.fen()], idx=0;
@@ -160,7 +211,7 @@ let playing=false, timer=null;
 let selSquare=null, drag=null;
 let lastMove=null, bestArrow=null;
 
-/* ====== Modo ====== */
+/* =================== Modo Niños / Adultos =================== */
 const modeSel = document.getElementById('modeSel');
 function statusMsg(t){ document.getElementById('status').textContent=t; }
 function applyMode(m){
@@ -172,34 +223,40 @@ function applyMode(m){
 modeSel.onchange = ()=>applyMode(modeSel.value);
 applyMode('kids');
 
-/* ====== Dibujo ====== */
+/* =================== Dibujo tablero =================== */
 function drawBoard(fenPieces){
-  const C = COLORS();
+  const light = CSS('--sq-light'), dark = CSS('--sq-dark');
+  const cell = S();
+
+  // Fondos
   for(let r=0;r<8;r++){
     for(let c=0;c<8;c++){
-      const light = (r+c)%2===0;
-      ctx.fillStyle = light? C.light : C.dark;
-      ctx.fillRect(c*S, r*S, S, S);
+      ctx.fillStyle = ((r+c)%2===0) ? light : dark;
+      ctx.fillRect(c*cell, r*cell, cell, cell);
     }
   }
+  // Resaltado último movimiento
   if(lastMove){
     const a=alg2rc(lastMove.from), b=alg2rc(lastMove.to);
     ctx.fillStyle=CSS('--hl-last');
-    ctx.fillRect(a.c*S,a.r*S,S,S); ctx.fillRect(b.c*S,b.r*S,S,S);
+    ctx.fillRect(a.c*cell,a.r*cell,cell,cell);
+    ctx.fillRect(b.c*cell,b.r*cell,cell,cell);
   }
+
+  // Piezas
   const rows = fenPieces.split('/');
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.font = `${S*0.74}px "Segoe UI Symbol","Noto Color Emoji","Apple Color Emoji",serif`;
+  ctx.font = `${cell*0.74}px "Segoe UI Symbol","Noto Color Emoji","Apple Color Emoji",serif`;
   for(let r=0;r<8;r++){
     let f=0;
     for(const ch of rows[r]){
       if(/\d/.test(ch)){ f += +ch; }
       else{
-        const x=(f+0.5)*S, y=(r+0.5)*S;
+        const x=(f+0.5)*cell, y=(r+0.5)*cell;
         const lightSq = (r+f)%2===0;
-        ctx.lineWidth = S*0.06;
+        ctx.lineWidth = cell*0.06;
         ctx.strokeStyle = lightSq? 'rgba(0,0,0,.85)' : 'rgba(255,255,255,.9)';
-        ctx.shadowColor='rgba(0,0,0,.35)'; ctx.shadowBlur=S*0.05;
+        ctx.shadowColor='rgba(0,0,0,.35)'; ctx.shadowBlur=cell*0.05;
         ctx.strokeText(GLYPH[ch]||'', x, y); ctx.shadowBlur=0;
         ctx.fillStyle = /[PRNBQK]/.test(ch)? '#ffffff' : '#0b1120';
         ctx.fillText(GLYPH[ch]||'', x, y);
@@ -207,41 +264,55 @@ function drawBoard(fenPieces){
       }
     }
   }
+
+  // Flecha mejor jugada
   if(bestArrow) drawArrow(bestArrow.from,bestArrow.to,'rgba(28,199,86,.9)');
+
+  // Pieza arrastrada
   if(drag){
     const {piece,x,y}=drag;
-    ctx.lineWidth=S*0.06; ctx.strokeStyle='rgba(0,0,0,.85)';
-    ctx.shadowColor='rgba(0,0,0,.35)'; ctx.shadowBlur=S*0.05;
+    ctx.lineWidth=cell*0.06; ctx.strokeStyle='rgba(0,0,0,.85)';
+    ctx.shadowColor='rgba(0,0,0,.35)'; ctx.shadowBlur=cell*0.05;
     ctx.strokeText(GLYPH[piece]||'', x, y); ctx.shadowBlur=0;
     ctx.fillStyle=/[PRNBQK]/.test(piece)? '#ffffff' : '#0b1120';
     ctx.fillText(GLYPH[piece]||'', x, y);
   }
 }
 function drawArrow(fromSq,toSq,color){
+  const cell=S();
   const a=alg2rc(fromSq), b=alg2rc(toSq);
-  const A={x:(a.c+0.5)*S,y:(a.r+0.5)*S}, B={x:(b.c+0.5)*S,y:(b.r+0.5)*S};
-  ctx.strokeStyle=color; ctx.lineWidth=Math.max(4,S*0.06); ctx.lineCap='round';
+  const A={x:(a.c+0.5)*cell,y:(a.r+0.5)*cell}, B={x:(b.c+0.5)*cell,y:(b.r+0.5)*cell};
+  ctx.strokeStyle=color; ctx.lineWidth=Math.max(4, cell*0.06); ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
-  const ang=Math.atan2(B.y-A.y,B.x-A.x), L=Math.max(18,S*0.35);
+  const ang=Math.atan2(B.y-A.y,B.x-A.x), L=Math.max(18,cell*0.35);
   ctx.beginPath(); ctx.moveTo(B.x,B.y);
   ctx.lineTo(B.x-L*Math.cos(ang-Math.PI/6),B.y-L*Math.sin(ang-Math.PI/6));
   ctx.lineTo(B.x-L*Math.cos(ang+Math.PI/6),B.y-L*Math.sin(ang+Math.PI/6));
   ctx.closePath(); ctx.fillStyle=color; ctx.fill();
 }
-function render(){ drawBoard((frames[idx]||game.fen()).split(' ')[0]); statusMsg(`Posición ${idx}/${frames.length-1}`); }
+function render(){
+  const fenPieces = (frames[idx]||game.fen()).split(' ')[0];
+  drawBoard(fenPieces);
+  document.getElementById('status').textContent = `Posición ${idx}/${frames.length-1}`;
+}
 
 function alg2rc(sq){ return {c: sq.charCodeAt(0)-97, r: 8-parseInt(sq[1],10)} }
 function rc2alg(r,c){ return String.fromCharCode(97+c)+(8-r) }
 function evt2sq(ev){
-  const rect=canvas.getBoundingClientRect();
-  const x=(ev.touches?ev.touches[0].clientX:ev.clientX)-rect.left;
-  const y=(ev.touches?ev.touches[0].clientY:ev.clientY)-rect.top;
-  const c=Math.min(7,Math.max(0,Math.floor(x/rect.width*8)));
-  const r=Math.min(7,Math.max(0,Math.floor(y/rect.height*8)));
-  return {r,c,x:x/rect.width*SIZE,y:y/rect.height*SIZE};
+  const rect = canvas.getBoundingClientRect();
+  const cx = (ev.touches?ev.touches[0].clientX:ev.clientX) - rect.left;
+  const cy = (ev.touches?ev.touches[0].clientY:ev.clientY) - rect.top;
+  const file = Math.min(7, Math.max(0, Math.floor(cx/rect.width*8)));
+  const rank = Math.min(7, Math.max(0, Math.floor(cy/rect.height*8)));
+  // Coordenadas en píxeles reales del canvas (retina-friendly)
+  const x = cx/rect.width * canvas.width;
+  const y = cy/rect.height * canvas.height;
+  return {r:rank, c:file, x, y};
 }
 
-/* ====== Movimiento (drag + click) + promoción ====== */
+/* =================== Movimiento (drag + click) + promoción =================== */
+let selSquare=null, drag=null;
+
 canvas.addEventListener('mousedown', e=>{
   const q=evt2sq(e), sq=rc2alg(q.r,q.c), piece=game.get(sq);
   if(piece){ selSquare=sq; drag={from:sq, piece:(piece.color==='w'?piece.type.toUpperCase():piece.type), x:q.x,y:q.y}; render(); }
@@ -259,6 +330,7 @@ canvas.addEventListener('click', e=>{
   if(selSquare && selSquare!==sq){ finishMove(selSquare, sq); selSquare=null; }
   else { const piece=game.get(sq); selSquare = piece? sq : null; }
 });
+
 function needsPromo(from,to){
   const p=game.get(from); if(!p||p.type!=='p') return false;
   return (p.color==='w'&&to[1]==='8')||(p.color==='b'&&to[1]==='1');
@@ -281,7 +353,10 @@ function tryMove(from,to,p){
   if(document.getElementById('auto').checked) scheduleAnalysis();
 }
 
-/* ====== Reproducción ====== */
+/* =================== Reproducción =================== */
+const prevBtn = document.getElementById('prevBtn'), nextBtn = document.getElementById('nextBtn');
+const resetBtn = document.getElementById('resetBtn'), playBtn = document.getElementById('playBtn');
+
 prevBtn.onclick = ()=>{ if(idx>0){ idx--; game.load(frames[idx]); lastMove=rebuildLast(idx); render(); if(auto.checked) scheduleAnalysis(); } };
 nextBtn.onclick = ()=>{ if(idx<frames.length-1){ idx++; game.load(frames[idx]); lastMove=rebuildLast(idx); render(); if(auto.checked) scheduleAnalysis(); } };
 resetBtn.onclick = ()=>{ idx=0; game.load(frames[0]); lastMove=null; bestArrow=null; render(); if(auto.checked) scheduleAnalysis(); };
@@ -301,10 +376,12 @@ function rebuildLast(k){
   return prev?{from:prev.from,to:prev.to}:null;
 }
 
-/* ====== PGN (archivo/textarea/drag&drop) ====== */
+/* =================== PGN (archivo/textarea/drag&drop) =================== */
 const file=document.getElementById('file'), pgnText=document.getElementById('pgnText');
 document.getElementById('loadTextBtn').onclick=()=>importPGNCollection(pgnText.value);
 file.onchange=async()=>{ const f=file.files?.[0]; if(!f) return; importPGNCollection(await f.text()); };
+
+// Drag & drop al tablero
 ['dragenter','dragover'].forEach(ev=>{
   canvas.addEventListener(ev, e=>{ e.preventDefault(); canvas.style.outline='3px dashed #69a24a'; });
 });
@@ -316,6 +393,7 @@ canvas.addEventListener('drop', async (e)=>{
   if(!/\.pgn|\.txt$/i.test(f.name)){ alert('Arrastra un archivo .pgn o .txt'); return; }
   importPGNCollection(await f.text());
 });
+
 function cleanPGN(txt){
   return (txt||'')
    .replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n')
@@ -360,7 +438,7 @@ function updateMoves(){
     if(i%2===0){ const turn=document.createElement('span'); turn.className='note'; turn.textContent=(Math.floor(i/2)+1)+'. '; box.appendChild(turn); }
     const sp=document.createElement('span'); sp.textContent=m+' '; sp.style.cursor='pointer';
     sp.onclick=()=>{ idx=i+1; game.load(fens[idx]); const g3=new Chess(); let prev=null; for(let k=0;k<=i;k++) prev=g3.move(san[k]);
-      lastMove=prev?{from:prev.from,to:prev.to}:null; bestArrow=null; render(); if(auto.checked) scheduleAnalysis(); };
+      lastMove=prev?{from:prev.from,to:prev.to}:null; bestArrow=null; render(); if(document.getElementById('auto').checked) scheduleAnalysis(); };
     box.appendChild(sp);
   });
   document.getElementById('gameInfo').textContent=`Movidas: ${san.length}`;
@@ -370,7 +448,7 @@ document.getElementById('copyFenBtn').onclick=async()=>{
   statusMsg(modeSel.value==='kids'?'¡FEN copiado! 📋':'FEN copiado.');
 };
 
-/* ====== Motor (Stockfish en Worker) ====== */
+/* =================== Motor (Stockfish en Worker, throttle UI) =================== */
 let engine=null, lastDepth=0, lastUi=0;
 const UI_MS=400;
 const MIRRORS=[
@@ -458,8 +536,12 @@ function runAnalysis(){
 document.getElementById('goBtn').onclick=runAnalysis;
 document.getElementById('stopBtn').onclick=()=>{ if(engine) engine.postMessage('stop'); };
 
-/* ====== Init ====== */
-window.addEventListener('load', ()=>{ frames=[game.fen()]; idx=0; render(); updateMoves(); });
+/* =================== Init =================== */
+window.addEventListener('load', ()=>{
+  frames=[game.fen()]; idx=0;
+  resizeBoard();            // ← clave para que el tablero se adapte desde el inicio
+  updateMoves();
+});
 </script>
 </body>
 </html>
