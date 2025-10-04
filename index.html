@@ -71,7 +71,17 @@
     #canvasBox{max-width:100vw}
     h1{font-size:20px}
   }
-</style>
+/* === AJUSTE DE PANTALLA Y PANEL DERECHO === */
+body.compact .grid{ grid-template-columns: 1fr; }
+body.compact .grid > .panel:nth-child(2){ display: none; }
+
+@media (min-width: 981px){
+  .grid > .panel:nth-child(2){
+    max-height: calc(100vh - 140px);
+    overflow: auto;
+  }
+}
+  </style>
 </head>
 <body>
   <h1>Visor PGN — tablero interactivo + análisis</h1>
