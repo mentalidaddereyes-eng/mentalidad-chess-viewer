@@ -1,0 +1,1607 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Visor PGN — Tablero Interactivo + Análisis</title>
+
+<!-- Reglas y parsing de ajedrez -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
+
+<style>
+  :root {
+    /* Colores base */
+    --bg: #0c1422;
+    --panel: #0f1b2e;
+    --borde: #232a36;
+    --txt: #e6edf3;
+    --muted: #9fb0c3;
+    
+    /* Colores del tablero */
+    --sq-light: #f0f8f0;
+    --sq-dark: #769656;
+    --sq-light-child: #fff8dc;
+    --sq-dark-child: #deb887;
+    
+    /* Botones */
+    --btn: #24324a;
+    --btnbd: #3b4a63;
+    --btnh: #2b3f5e;
+    --ok: #22c55e;
+    --primary: #2f7d4e;
+    --primary-hover: #256f43;
+    
+    /* Modo niños */
+    --child-bg: #1a2a3a;
+    --child-panel: #243447;
+    --child-txt: #f0f8ff;
+  }
+
+  /* Reset y base */
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--txt);
+    font: 16px/1.4 Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  /* Modo niños */
+  body.child-mode {
+    --bg: var(--child-bg);
+    --panel: var(--child-panel);
+    --txt: var(--child-txt);
+    --sq-light: var(--sq-light-child);
+    --sq-dark: var(--sq-dark-child);
+  }
+
+  /* Layout principal */
+  h1 {
+    max-width: 1200px;
+    margin: 12px auto 8px;
+    padding: 0 16px;
+    font-size: clamp(20px, 4vw, 28px);
+    text-align: center;
+    font-weight: 600;
+  }
+
+  .wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 8px 12px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr minmax(300px, 400px);
+    gap: 16px;
+  }
+
+  /* Responsive */
+  @media (max-width: 1024px) {
+    .grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .wrap {
+      padding: 8px 10px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .wrap {
+      padding: 6px 8px;
+    }
+    h1 {
+      margin: 8px auto 6px;
+      padding: 0 12px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .wrap {
+      padding: 4px 6px;
+    }
+    h1 {
+      padding: 0 8px;
+    }
+  }
+
+  /* Paneles */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Canvas optimizado - FIX PRINCIPAL */
+  #canvasBox {
+    width: 100%;
+    max-width: min(720px, 90vw);
+    margin: auto;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  canvas {
+    width: 100%;
+    max-width: 720px;
+    height: auto;
+    display: block;
+    border: 2px solid var(--borde);
+    border-radius: 12px;
+    background: transparent;
+    aspect-ratio: 1;
+    touch-action: none;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    /* Prevenir expansión indefinida */
+    min-width: 0;
+    min-height: 0;
+    object-fit: contain;
+  }
+
+  @media (max-width: 768px) {
+    #canvasBox {
+      max-width: min(600px, 95vw);
+    }
+  }
+
+  @media (max-width: 480px) {
+    #canvasBox {
+      max-width: min(400px, 98vw);
+    }
+  }
+
+  /* Estado */
+  .status {
+    margin-top: 12px;
+    color: var(--ok);
+    font-size: 14px;
+    text-align: center;
+    font-weight: 500;
+  }
+
+  /* Controles */
+  .controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    margin-top: 12px;
+  }
+
+  @media (max-width: 768px) {
+    .controls {
+      gap: 6px;
+      justify-content: flex-start;
+    }
+  }
+
+  /* Botones mejorados */
+  button {
+    background: var(--btn);
+    border: 1px solid var(--btnbd);
+    color: var(--txt);
+    border-radius: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+    overflow: hidden;
+  }
+
+  button:hover {
+    background: var(--btnh);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  button:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  @media (max-width: 480px) {
+    button {
+      padding: 10px 12px;
+      font-size: 13px;
+      min-height: 40px;
+    }
+  }
+
+  .primary {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+
+  .primary:hover {
+    background: var(--primary-hover);
+  }
+
+  .ghost {
+    background: transparent;
+    border-color: var(--borde);
+  }
+
+  /* Chips y controles */
+  .chip {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--borde);
+    background: rgba(11, 22, 39, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+  }
+
+  @media (max-width: 480px) {
+    .chip {
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+  }
+
+  /* Inputs mejorados */
+  input, select, textarea {
+    font: inherit;
+    background: rgba(11, 22, 39, 0.8);
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: var(--txt);
+    transition: all 0.2s ease;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--ok);
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+  }
+
+  input[type="number"] {
+    width: 80px;
+    text-align: center;
+  }
+
+  @media (max-width: 480px) {
+    input[type="number"] {
+      width: 70px;
+      padding: 8px;
+    }
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    resize: vertical;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 480px) {
+    textarea {
+      min-height: 100px;
+      font-size: 13px;
+    }
+  }
+
+  /* Cajas de información */
+  .box {
+    background: rgba(11, 22, 39, 0.6);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 14px;
+    min-height: 60px;
+    font-size: 14px;
+  }
+
+  @media (max-width: 480px) {
+    .box {
+      padding: 12px;
+      min-height: 50px;
+      font-size: 13px;
+    }
+  }
+
+  .mono {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    white-space: pre-wrap;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 480px) {
+    .mono {
+      font-size: 12px;
+    }
+  }
+
+  .note {
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+  }
+
+  @media (max-width: 480px) {
+    .note {
+      font-size: 13px;
+    }
+  }
+
+  /* Barra de progreso */
+  .bar {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(18, 32, 52, 0.8);
+    overflow: hidden;
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .bar > i {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #2dd4bf, #22c55e);
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+
+  /* File input disfrazado */
+  #file {
+    display: none;
+  }
+
+  label[for="file"] {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  label[for="file"]:hover {
+    transform: translateY(-1px);
+  }
+
+  label[for="file"]::before {
+    content: "📂";
+    font-size: 16px;
+  }
+
+  /* Selector de partida */
+  #gamePicker {
+    display: none;
+    margin-top: 8px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  @media (max-width: 768px) {
+    #gamePicker {
+      margin-top: 6px;
+    }
+  }
+
+  #gameSelect {
+    width: 100%;
+    margin-top: 6px;
+  }
+
+  /* Modal de promoción mejorado */
+  #promo {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+  }
+
+  #promo .card {
+    background: var(--panel);
+    border: 1px solid var(--borde);
+    padding: 24px;
+    border-radius: 16px;
+    max-width: 320px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  }
+
+  @media (max-width: 480px) {
+    #promo .card {
+      padding: 20px;
+      max-width: 300px;
+    }
+  }
+
+  #promo .card h3 {
+    margin: 0 0 20px 0;
+    font-size: 18px;
+    color: var(--txt);
+    font-weight: 600;
+  }
+
+  @media (max-width: 480px) {
+    #promo .card h3 {
+      font-size: 16px;
+      margin: 0 0 16px 0;
+    }
+  }
+
+  #promo .choices {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 480px) {
+    #promo .choices {
+      gap: 10px;
+    }
+  }
+
+  #promo button {
+    font-size: 32px;
+    padding: 16px 20px;
+    min-width: 60px;
+    min-height: 60px;
+    border-radius: 12px;
+    background: var(--btn);
+    border: 1px solid var(--btnbd);
+    color: var(--txt);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  #promo button:hover {
+    background: var(--btnh);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  @media (max-width: 480px) {
+    #promo button {
+      font-size: 28px;
+      padding: 12px 16px;
+      min-width: 50px;
+      min-height: 50px;
+    }
+  }
+
+  /* Modo niños específico */
+  body.child-mode #promo button {
+    font-size: 36px;
+    background: #4a90e2;
+    border-color: #4a90e2;
+  }
+
+  body.child-mode #promo button:hover {
+    background: #357abd;
+  }
+
+  /* Indicadores de modo */
+  .mode-indicator {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    padding: 8px 12px;
+    background: var(--primary);
+    color: white;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 100;
+    transition: all 0.3s ease;
+  }
+
+  body.child-mode .mode-indicator {
+    background: #4a90e2;
+  }
+
+  /* Mejoras de accesibilidad */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Focus visible */
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--ok);
+    outline-offset: 2px;
+  }
+
+  /* Estados de carga */
+  .loading {
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  .loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid var(--ok);
+    border-top: 2px solid transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* Prevenir overflow en móviles */
+  @media (max-width: 768px) {
+    body {
+      overflow-x: hidden;
+    }
+    
+    .wrap {
+      overflow-x: hidden;
+    }
+  }
+</style>
+</head>
+<body>
+  <h1>Visor PGN — Tablero Interactivo + Análisis</h1>
+  <div id="modeIndicator" class="mode-indicator">Modo Adultos</div>
+
+  <div class="wrap grid">
+    <!-- Panel izquierdo - Tablero -->
+    <div class="panel">
+      <div id="canvasBox">
+        <canvas id="board" width="720" height="720" 
+                role="img" 
+                aria-label="Tablero de ajedrez interactivo">
+        </canvas>
+      </div>
+
+      <div class="controls">
+        <button id="prevBtn" class="ghost" aria-label="Movimiento anterior">← Anterior</button>
+        <button id="playBtn" class="primary" aria-label="Reproducir partida">▶ Play</button>
+        <button id="nextBtn" class="ghost" aria-label="Siguiente movimiento">Siguiente →</button>
+        <button id="resetBtn" class="ghost" aria-label="Reiniciar partida">Reiniciar</button>
+        <label class="chip" for="speed">
+          <span>Velocidad</span>
+          <input id="speed" type="number" value="800" min="100" step="50" aria-label="Velocidad de reproducción">
+        </label>
+        <label class="chip">
+          <input id="auto" type="checkbox" checked aria-label="Análisis automático">
+          <span>Auto-analizar</span>
+        </label>
+        <button id="modeToggle" class="ghost" aria-label="Cambiar modo">👶 Modo Niños</button>
+      </div>
+
+      <div id="status" class="status" role="status" aria-live="polite">
+        OK: tablero listo. Click o arrastra para mover.
+      </div>
+    </div>
+
+    <!-- Panel derecho - Controles -->
+    <div class="panel">
+      <div class="controls">
+        <label for="file" class="primary" aria-label="Abrir archivo PGN">📂 Abrir PGN</label>
+        <input id="file" type="file" accept=".pgn,.txt" aria-label="Seleccionar archivo PGN">
+        <button id="copyFenBtn" class="ghost" aria-label="Copiar posición FEN">Copiar FEN</button>
+      </div>
+
+      <div id="gamePicker" class="controls">
+        <span class="note">Partidas en el archivo:</span>
+        <select id="gameSelect" class="chip" aria-label="Seleccionar partida"></select>
+        <span id="gameCount" class="note"></span>
+      </div>
+
+      <div class="note" style="margin: 12px 0 8px">
+        O pega PGN aquí (opcional) y pulsa "Importar":
+      </div>
+      <textarea id="pgnText" 
+                placeholder="(Opcional) Pega tu PGN aquí…"
+                aria-label="Área de texto para pegar PGN"></textarea>
+      
+      <div class="controls" style="margin-top: 12px">
+        <button id="loadTextBtn" class="primary" aria-label="Importar PGN del texto">Importar</button>
+        <span id="gameInfo" class="note">Sin partida cargada.</span>
+      </div>
+
+      <div id="movesBox" class="box mono" 
+           style="margin-top: 12px; min-height: 60px"
+           aria-label="Lista de movimientos">
+        Movidas aparecerán aquí…
+      </div>
+
+      <div class="controls" style="margin-top: 16px">
+        <span class="note">Análisis Stockfish</span>
+        <div class="bar" style="flex: 1">
+          <i id="depthBar" style="width: 0%"></i>
+        </div>
+      </div>
+
+      <div class="controls" style="gap: 12px; margin-top: 12px">
+        <label class="chip">
+          <span>Profundidad máx:</span>
+          <input id="maxDepth" type="number" min="6" max="30" value="18" aria-label="Profundidad máxima de análisis">
+        </label>
+        <label class="chip">
+          <span>Líneas:</span>
+          <input id="multipv" type="number" min="1" max="3" value="1" aria-label="Número de líneas a mostrar">
+        </label>
+        <button id="goBtn" class="primary" aria-label="Iniciar análisis">Analizar</button>
+        <button id="stopBtn" class="ghost" aria-label="Detener análisis">Detener</button>
+      </div>
+
+      <div id="evalBox" class="box" style="margin-top: 12px"
+           aria-label="Evaluación de la posición">
+        Eval: — | Profundidad: — | Mejor jugada: — 
+        <span id="engineSrc" class="note"></span>
+      </div>
+      
+      <div id="pvBox" class="box mono" style="margin-top: 12px"
+           aria-label="Línea principal de variación">
+        Líneas aparecerán aquí…
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de promoción -->
+  <div id="promo" role="dialog" aria-labelledby="promo-title" aria-modal="true">
+    <div class="card">
+      <h3 id="promo-title">Elige pieza de promoción</h3>
+      <div class="choices">
+        <button data-p="q" aria-label="Promocionar a Dama">♕</button>
+        <button data-p="r" aria-label="Promocionar a Torre">♖</button>
+        <button data-p="b" aria-label="Promocionar a Alfil">♗</button>
+        <button data-p="n" aria-label="Promocionar a Caballo">♘</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ============ CONFIGURACIÓN Y CONSTANTES ============ */
+const CONFIG = {
+  CANVAS_SIZE: 720,
+  SQUARE_SIZE: 720 / 8,
+  PIECE_FONT_SIZE: 0.74,
+  SHADOW_BLUR: 0.05,
+  STROKE_WIDTH: 0.06,
+  ANALYSIS_DELAY: 300,
+  TOUCH_VIBRATION: 50,
+  MAX_DEPTH_MOBILE: 12,
+  MAX_DEPTH_DESKTOP: 18
+};
+
+const COLORS = {
+  light: '#f0f8f0',
+  dark: '#769656',
+  lightChild: '#fff8dc',
+  darkChild: '#deb887',
+  pieceWhite: '#ffffff',
+  pieceBlack: '#0b1120',
+  highlight: 'rgba(255,255,0,0.18)',
+  shadow: 'rgba(0,0,0,0.35)'
+};
+
+const PIECE_SYMBOLS = {
+  'P': '♙', 'N': '♘', 'B': '♗', 'R': '♖', 'Q': '♕', 'K': '♔',
+  'p': '♟', 'n': '♞', 'b': '♝', 'r': '♜', 'q': '♛', 'k': '♚'
+};
+
+const PROMOTION_PIECES = {
+  'q': '♕', 'r': '♖', 'b': '♗', 'n': '♘'
+};
+
+/* ============ ELEMENTOS DOM ============ */
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d', { alpha: true });
+const modeIndicator = document.getElementById('modeIndicator');
+
+/* ============ ESTADO GLOBAL ============ */
+let game = new Chess();
+let frames = [game.fen()];
+let currentIndex = 0;
+let isPlaying = false;
+let playTimer = null;
+let selectedSquare = null;
+let dragState = null;
+let isTouch = false;
+let touchStartTime = 0;
+let isChildMode = false;
+
+/* ============ MOTOR DE ANÁLISIS ============ */
+let engine = null;
+let engineReady = false;
+let lastDepth = 0;
+let lastBest = '';
+let isAnalyzing = false;
+let analysisTimer = null;
+
+const ENGINE_SOURCES = [
+  './engine/stockfish.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/9.0.0/stockfish.js'
+];
+
+/* ============ FUNCIONES DE UTILIDAD ============ */
+function getCssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function getCurrentColors() {
+  return isChildMode ? 
+    { light: COLORS.lightChild, dark: COLORS.darkChild } :
+    { light: COLORS.light, dark: COLORS.dark };
+}
+
+function log(message, type = 'info') {
+  console[type](`[ChessViewer] ${message}`);
+}
+
+function setStatus(message) {
+  const statusEl = document.getElementById('status');
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.setAttribute('aria-live', 'polite');
+  }
+}
+
+/* ============ RENDERIZADO DEL TABLERO OPTIMIZADO ============ */
+function drawBoard(fenPieces, highlight = null) {
+  const colors = getCurrentColors();
+  
+  // Limpiar canvas completamente
+  ctx.clearRect(0, 0, CONFIG.CANVAS_SIZE, CONFIG.CANVAS_SIZE);
+  
+  // Dibujar casillas
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const isLight = (row + col) % 2 === 0;
+      ctx.fillStyle = isLight ? colors.light : colors.dark;
+      ctx.fillRect(col * CONFIG.SQUARE_SIZE, row * CONFIG.SQUARE_SIZE, CONFIG.SQUARE_SIZE, CONFIG.SQUARE_SIZE);
+      
+      // Resaltar casilla si es necesario
+      if (highlight && highlight.r === row && highlight.c === col) {
+        ctx.fillStyle = COLORS.highlight;
+        ctx.fillRect(col * CONFIG.SQUARE_SIZE, row * CONFIG.SQUARE_SIZE, CONFIG.SQUARE_SIZE, CONFIG.SQUARE_SIZE);
+      }
+    }
+  }
+  
+  // Dibujar piezas con renderizado optimizado
+  drawPieces(fenPieces);
+  
+  // Dibujar pieza arrastrada si existe
+  if (dragState) {
+    drawDraggedPiece();
+  }
+}
+
+function drawPieces(fenPieces) {
+  const pieceRows = fenPieces.split('/');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `${CONFIG.SQUARE_SIZE * CONFIG.PIECE_FONT_SIZE}px "Segoe UI Symbol", "Noto Color Emoji", "Apple Color Emoji", "DejaVu Sans", serif`;
+  
+  for (let row = 0; row < 8; row++) {
+    let file = 0;
+    for (const char of pieceRows[row]) {
+      if (/\d/.test(char)) {
+        file += parseInt(char, 10);
+      } else {
+        const x = (file + 0.5) * CONFIG.SQUARE_SIZE;
+        const y = (row + 0.5) * CONFIG.SQUARE_SIZE;
+        const isLightSquare = (row + file) % 2 === 0;
+        
+        // Configurar sombra y contorno
+        ctx.shadowColor = COLORS.shadow;
+        ctx.shadowBlur = CONFIG.SQUARE_SIZE * CONFIG.SHADOW_BLUR;
+        ctx.lineWidth = CONFIG.SQUARE_SIZE * CONFIG.STROKE_WIDTH;
+        ctx.strokeStyle = isLightSquare ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)';
+        
+        // Dibujar contorno
+        ctx.strokeText(PIECE_SYMBOLS[char] || '', x, y);
+        
+        // Dibujar pieza
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = /[PRNBQK]/.test(char) ? COLORS.pieceWhite : COLORS.pieceBlack;
+        ctx.fillText(PIECE_SYMBOLS[char] || '', x, y);
+        
+        file++;
+      }
+    }
+  }
+}
+
+function drawDraggedPiece() {
+  if (!dragState) return;
+  
+  const { piece, x, y } = dragState;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `${CONFIG.SQUARE_SIZE * CONFIG.PIECE_FONT_SIZE}px "Segoe UI Symbol", "Noto Color Emoji", "Apple Color Emoji", "DejaVu Sans", serif`;
+  
+  // Sombra más pronunciada para pieza arrastrada
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = CONFIG.SQUARE_SIZE * (CONFIG.SHADOW_BLUR + 0.02);
+  ctx.lineWidth = CONFIG.SQUARE_SIZE * (CONFIG.STROKE_WIDTH + 0.01);
+  ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+  ctx.strokeText(PIECE_SYMBOLS[piece] || '', x, y);
+  
+  // Pieza con transparencia sutil
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = /[PRNBQK]/.test(piece) ? 'rgba(255,255,255,0.95)' : 'rgba(11,17,32,0.95)';
+  ctx.fillText(PIECE_SYMBOLS[piece] || '', x, y);
+}
+
+function render() {
+  // Prevenir bucles de renderizado
+  if (typeof render._rendering === 'undefined') {
+    render._rendering = false;
+  }
+  
+  if (render._rendering) {
+    return;
+  }
+  
+  render._rendering = true;
+  
+  try {
+    const fen = frames[currentIndex] || game.fen();
+    drawBoard(fen.split(' ')[0]);
+    setStatus(`Posición ${currentIndex}/${frames.length - 1}`);
+  } finally {
+    render._rendering = false;
+  }
+}
+
+/* ============ CONVERSIÓN DE COORDENADAS ============ */
+function algebraicToRC(square) {
+  return {
+    c: square.charCodeAt(0) - 97,
+    r: 8 - parseInt(square[1], 10)
+  };
+}
+
+function rcToAlgebraic(row, col) {
+  return String.fromCharCode(97 + col) + (8 - row);
+}
+
+function eventToSquare(event) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+  const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+  
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  
+  // Usar rect.width para mantener proporción cuadrada
+  const size = rect.width;
+  const col = Math.min(7, Math.max(0, Math.floor(x / size * 8)));
+  const row = Math.min(7, Math.max(0, Math.floor(y / size * 8)));
+  
+  return { row, col, x: x / size * CONFIG.CANVAS_SIZE, y: y / size * CONFIG.CANVAS_SIZE };
+}
+
+/* ============ MANEJO DE EVENTOS TÁCTILES Y MOUSE OPTIMIZADO ============ */
+function handleStart(event) {
+  const square = eventToSquare(event);
+  const algebraic = rcToAlgebraic(square.row, square.col);
+  const piece = game.get(algebraic);
+  
+  if (piece) {
+    selectedSquare = algebraic;
+    dragState = {
+      from: algebraic,
+      piece: piece.color === 'w' ? piece.type.toUpperCase() : piece.type,
+      x: square.x,
+      y: square.y
+    };
+    
+    drawBoard(game.fen().split(' ')[0], { r: square.row, c: square.col });
+    
+    // Feedback táctil
+    if ('vibrate' in navigator && isTouch) {
+      navigator.vibrate(CONFIG.TOUCH_VIBRATION);
+    }
+  } else {
+    selectedSquare = null;
+  }
+}
+
+function handleMove(event) {
+  if (!dragState || isTouch) return;
+  
+  const square = eventToSquare(event);
+  dragState.x = square.x;
+  dragState.y = square.y;
+  drawBoard(game.fen().split(' ')[0]);
+}
+
+function handleEnd(event) {
+  if (!dragState) return;
+  
+  const square = eventToSquare(event);
+  finishMove(dragState.from, rcToAlgebraic(square.row, square.col));
+  dragState = null;
+  
+  if (isTouch) {
+    isTouch = false;
+  }
+}
+
+// Event listeners para mouse - OPTIMIZADOS
+canvas.addEventListener('mousedown', (e) => {
+  if (isTouch) return;
+  handleStart(e);
+}, { passive: true });
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!dragState || isTouch) return;
+  handleMove(e);
+}, { passive: true });
+
+canvas.addEventListener('mouseup', (e) => {
+  if (!dragState || isTouch) return;
+  handleEnd(e);
+}, { passive: true });
+
+canvas.addEventListener('mouseleave', () => {
+  if (dragState && !isTouch) {
+    dragState = null;
+    render();
+  }
+}, { passive: true });
+
+// Event listeners para touch - OPTIMIZADOS
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  isTouch = true;
+  touchStartTime = Date.now();
+  handleStart(e.touches[0]);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (!dragState) return;
+  const square = eventToSquare(e.touches[0]);
+  dragState.x = square.x;
+  dragState.y = square.y;
+  drawBoard(game.fen().split(' ')[0]);
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  if (!dragState) return;
+  handleEnd(e.changedTouches[0]);
+}, { passive: false });
+
+// Click para selección - OPTIMIZADO
+canvas.addEventListener('click', (e) => {
+  if (dragState || isTouch) return;
+  
+  const square = eventToSquare(e);
+  const algebraic = rcToAlgebraic(square.row, square.col);
+  
+  if (selectedSquare && selectedSquare !== algebraic) {
+    finishMove(selectedSquare, algebraic);
+    selectedSquare = null;
+  } else {
+    const piece = game.get(algebraic);
+    selectedSquare = piece ? algebraic : null;
+    
+    if (selectedSquare) {
+      drawBoard(game.fen().split(' ')[0], { r: square.row, c: square.col });
+    }
+  }
+}, { passive: true });
+
+/* ============ LÓGICA DE MOVIMIENTOS ============ */
+function needsPromotion(from, to) {
+  const piece = game.get(from);
+  if (!piece || piece.type !== 'p') return false;
+  
+  const targetRow = 8 - parseInt(to[1], 10);
+  return (piece.color === 'w' && to[1] === '8') || (piece.color === 'b' && to[1] === '1');
+}
+
+function finishMove(from, to) {
+  if (needsPromotion(from, to)) {
+    openPromotionModal((promotion) => {
+      tryPerformMove(from, to, promotion);
+    });
+    return;
+  }
+  tryPerformMove(from, to);
+}
+
+function tryPerformMove(from, to, promotion = 'q') {
+  const move = game.move({ from, to, promotion });
+  
+  if (!move) {
+    setStatus('Movimiento ilegal');
+    render();
+    return;
+  }
+  
+  frames.push(game.fen());
+  currentIndex = frames.length - 1;
+  render();
+  updateMovesDisplay();
+  
+  if (document.getElementById('auto').checked) {
+    scheduleAnalysis();
+  }
+}
+
+/* ============ MODAL DE PROMOCIÓN ============ */
+function openPromotionModal(callback) {
+  const modal = document.getElementById('promo');
+  modal.style.display = 'flex';
+  
+  const handlePromotion = (event) => {
+    const promotion = event.target?.dataset?.p;
+    if (!promotion) return;
+    
+    modal.style.display = 'none';
+    modal.removeEventListener('click', handlePromotion);
+    callback(promotion);
+  };
+  
+  modal.addEventListener('click', handlePromotion);
+}
+
+/* ============ CONTROLES DE REPRODUCCIÓN ============ */
+function updateMovesDisplay() {
+  const moves = game.history();
+  const movesText = moves.map((move, index) => 
+    (index % 2 === 0 ? `${Math.floor(index / 2) + 1}. ` : '') + move
+  ).join(' ');
+  
+  document.getElementById('movesBox').textContent = movesText;
+  document.getElementById('gameInfo').textContent = `Movidas: ${moves.length}`;
+}
+
+// Event listeners para controles - OPTIMIZADOS
+document.getElementById('prevBtn').addEventListener('click', () => {
+  if (currentIndex > 0) {
+    currentIndex--;
+    game.load(frames[currentIndex]);
+    render();
+    if (document.getElementById('auto').checked) {
+      scheduleAnalysis();
+    }
+  }
+}, { passive: true });
+
+document.getElementById('nextBtn').addEventListener('click', () => {
+  if (currentIndex < frames.length - 1) {
+    currentIndex++;
+    game.load(frames[currentIndex]);
+    render();
+    if (document.getElementById('auto').checked) {
+      scheduleAnalysis();
+    }
+  }
+}, { passive: true });
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  currentIndex = 0;
+  game.load(frames[0]);
+  render();
+  if (document.getElementById('auto').checked) {
+    scheduleAnalysis();
+  }
+}, { passive: true });
+
+document.getElementById('playBtn').addEventListener('click', () => {
+  if (isPlaying) {
+    clearInterval(playTimer);
+    isPlaying = false;
+    document.getElementById('playBtn').textContent = '▶ Play';
+    return;
+  }
+  
+  isPlaying = true;
+  document.getElementById('playBtn').textContent = '⏸ Pausa';
+  
+  const speed = Math.max(100, parseInt(document.getElementById('speed').value) || 800);
+  playTimer = setInterval(() => {
+    if (currentIndex < frames.length - 1) {
+      currentIndex++;
+      game.load(frames[currentIndex]);
+      render();
+      if (document.getElementById('auto').checked) {
+        scheduleAnalysis();
+      }
+    } else {
+      clearInterval(playTimer);
+      isPlaying = false;
+      document.getElementById('playBtn').textContent = '▶ Play';
+    }
+  }, speed);
+}, { passive: true });
+
+/* ============ MODO NIÑOS/ADULTOS ============ */
+function toggleChildMode() {
+  isChildMode = !isChildMode;
+  document.body.classList.toggle('child-mode', isChildMode);
+  
+  const indicator = document.getElementById('modeIndicator');
+  const toggleBtn = document.getElementById('modeToggle');
+  
+  if (isChildMode) {
+    indicator.textContent = 'Modo Niños';
+    toggleBtn.textContent = '👨 Modo Adultos';
+    setStatus('Modo Niños activado - Colores más suaves');
+  } else {
+    indicator.textContent = 'Modo Adultos';
+    toggleBtn.textContent = '👶 Modo Niños';
+    setStatus('Modo Adultos activado');
+  }
+  
+  // Re-renderizar con nuevos colores
+  render();
+}
+
+document.getElementById('modeToggle').addEventListener('click', toggleChildMode, { passive: true });
+
+/* ============ IMPORTACIÓN PGN ============ */
+function cleanPGN(text) {
+  return text
+    .replace(/^\uFEFF/, '') // BOM
+    .replace(/\r\n?/g, '\n') // Normalizar saltos de línea
+    .replace(/\$\d+/g, '') // NAGs
+    .replace(/\{[^}]*\}/g, '') // Comentarios {...}
+    .replace(/\([^()]*\)/g, '') // Variantes simples
+    .replace(/\n{3,}/g, '\n\n') // Múltiples saltos de línea
+    .trim();
+}
+
+function splitGames(rawText) {
+  const text = cleanPGN(rawText);
+  const indices = [];
+  const regex = /\n(?=\[Event\s*")|^\[Event\s*"/gm;
+  let match;
+  
+  while ((match = regex.exec(text))) {
+    indices.push(match.index);
+  }
+  
+  if (!indices.length) return [text];
+  
+  const games = [];
+  for (let i = 0; i < indices.length; i++) {
+    const start = indices[i];
+    const end = indices[i + 1] ?? text.length;
+    games.push(text.slice(start, end).trim());
+  }
+  
+  return games.filter(Boolean);
+}
+
+function getGameTitle(pgn) {
+  const event = (pgn.match(/\[Event\s*"([^"]*)"\]/) || [])[1] || 'Partida';
+  const date = (pgn.match(/\[Date\s*"([^"]*)"\]/) || [])[1] || '';
+  const white = (pgn.match(/\[White\s*"([^"]*)"\]/) || [])[1] || '';
+  const black = (pgn.match(/\[Black\s*"([^"]*)"\]/) || [])[1] || '';
+  
+  return `${event} — ${white} vs ${black} ${date ? `(${date})` : ''}`.trim();
+}
+
+function importPGNCollection(rawText) {
+  const games = splitGames(rawText);
+  
+  if (!games.length) {
+    alert('No se encontraron partidas en el archivo.');
+    return;
+  }
+  
+  // Configurar selector de partidas
+  const selector = document.getElementById('gameSelect');
+  selector.innerHTML = '';
+  
+  games.forEach((game, index) => {
+    const option = document.createElement('option');
+    option.value = index;
+    option.textContent = getGameTitle(game);
+    selector.appendChild(option);
+  });
+  
+  const count = document.getElementById('gameCount');
+  count.textContent = games.length > 1 ? `(${games.length})` : '';
+  
+  const picker = document.getElementById('gamePicker');
+  picker.style.display = games.length > 1 ? 'flex' : 'none';
+  
+  selector.addEventListener('change', () => loadPGN(games[parseInt(selector.value)], true), { passive: true });
+  
+  // Cargar primera partida automáticamente
+  loadPGN(games[0], true);
+}
+
+function loadPGN(pgn, reset = true) {
+  const success = game.load_pgn(pgn, { sloppy: true });
+  
+  if (!success) {
+    alert('PGN inválido.');
+    return false;
+  }
+  
+  // Reconstruir frames
+  const moves = game.history();
+  game.reset();
+  frames = [game.fen()];
+  
+  for (const move of moves) {
+    game.move(move);
+    frames.push(game.fen());
+  }
+  
+  currentIndex = 0;
+  render();
+  updateMovesDisplay();
+  
+  if (document.getElementById('auto').checked) {
+    scheduleAnalysis();
+  }
+  
+  if (reset) {
+    setStatus('Partida cargada.');
+  }
+  
+  return true;
+}
+
+// Event listeners para importación - OPTIMIZADOS
+document.getElementById('file').addEventListener('change', async () => {
+  const file = document.getElementById('file').files?.[0];
+  if (!file) return;
+  
+  try {
+    const text = await file.text();
+    importPGNCollection(text);
+  } catch (error) {
+    log('Error al leer archivo: ' + error.message, 'error');
+    alert('Error al leer el archivo.');
+  }
+}, { passive: true });
+
+document.getElementById('loadTextBtn').addEventListener('click', () => {
+  const text = document.getElementById('pgnText').value;
+  if (text.trim()) {
+    importPGNCollection(text);
+  } else {
+    alert('Por favor, pega un PGN en el área de texto.');
+  }
+}, { passive: true });
+
+document.getElementById('copyFenBtn').addEventListener('click', async () => {
+  const fen = frames[currentIndex] || game.fen();
+  
+  try {
+    await navigator.clipboard.writeText(fen);
+    setStatus('FEN copiado al portapapeles.');
+  } catch (error) {
+    log('Error al copiar FEN: ' + error.message, 'error');
+    setStatus('Error al copiar FEN.');
+  }
+}, { passive: true });
+
+/* ============ MOTOR STOCKFISH OPTIMIZADO ============ */
+function ensureEngine() {
+  if (engine) return engine;
+  
+  // Intentar motor local primero
+  try {
+    engine = new Worker(ENGINE_SOURCES[0]);
+    engine.onmessage = handleEngineMessage;
+    engine.onerror = (error) => {
+      log('Error cargando motor local: ' + error.message, 'warn');
+      loadCDNEngine();
+    };
+    return engine;
+  } catch (error) {
+    log('No se pudo cargar motor local, usando CDN', 'warn');
+    return loadCDNEngine();
+  }
+}
+
+function loadCDNEngine() {
+  const code = `
+    self.onerror = e => postMessage({type:'sf-error', msg:String(e && e.message || e)});
+    let loaded = false;
+    ${ENGINE_SOURCES.slice(1).map((url, i) => `
+    if (!loaded) {
+      try { 
+        importScripts('${url}'); 
+        postMessage({type:'sf-ok', src:'CDN ${i+1}'}); 
+        loaded = true;
+      } catch(e) { console.warn('Falló CDN ${i+1}:', e); }
+    }`).join('')}
+    if (!loaded) {
+      postMessage({type:'sf-error', msg:'No se pudo cargar Stockfish desde ningún CDN.'});
+    }
+  `;
+  
+  const blob = new Blob([code], { type: 'application/javascript' });
+  engine = new Worker(URL.createObjectURL(blob));
+  engine.onmessage = handleEngineMessage;
+  return engine;
+}
+
+function handleEngineMessage(event) {
+  const data = event.data;
+  
+  if (data?.type === 'sf-ok') {
+    engineReady = true;
+    document.getElementById('engineSrc').textContent = ` (motor: ${data.src})`;
+    setStatus('Motor de ajedrez listo.');
+    return;
+  }
+  
+  if (data?.type === 'sf-error') {
+    log('Error del motor: ' + data.msg, 'error');
+    showEvaluation('—', '—', '—');
+    document.getElementById('engineSrc').textContent = ' (motor: error)';
+    setStatus('Error: Motor no disponible');
+    isAnalyzing = false;
+    return;
+  }
+  
+  // Manejar bestmove
+  if (typeof data === 'string' && data.startsWith('bestmove')) {
+    isAnalyzing = false;
+    setStatus('Análisis completado');
+    return;
+  }
+  
+  const line = typeof data === 'string' ? data : (data?.data || '');
+  if (!line || !line.startsWith('info ')) return;
+  
+  const depth = parseInt((line.match(/\bdepth\s+(\d+)/) || [])[1]) || lastDepth;
+  const cp = (line.match(/\bcp\s+(-?\d+)/) || [])[1];
+  const mate = (line.match(/\bmate\s+(-?\d+)/) || [])[1];
+  const pv = (line.match(/\bpv\s+(.+)/) || [])[1] || '';
+  
+  if (depth < lastDepth) return;
+  
+  lastDepth = depth;
+  const evaluation = mate ? `#${mate}` : (cp ? (parseInt(cp) / 100).toFixed(2) : '—');
+  const bestMove = pv.split(' ')[0] || '—';
+  
+  if (bestMove !== lastBest) {
+    lastBest = bestMove;
+  }
+  
+  showEvaluation(evaluation, depth, uciToNice(bestMove));
+  showPrincipalVariation(pv);
+  
+  const maxDepth = Math.max(6, Math.min(30, parseInt(document.getElementById('maxDepth').value) || CONFIG.MAX_DEPTH_DESKTOP));
+  const progress = Math.min(100, Math.round(depth / maxDepth * 100));
+  document.getElementById('depthBar').style.width = `${progress}%`;
+}
+
+function uciToNice(uci) {
+  if (!uci || uci === '—') return '—';
+  
+  const figurines = { p: '', n: '♘', b: '♗', r: '♖', q: '♕', k: '♔' };
+  const from = uci.slice(0, 2);
+  const to = uci.slice(2, 4);
+  const promotion = uci[4];
+  
+  const piece = game.get(from);
+  const fig = piece ? figurines[piece.type] || '' : '';
+  const promoFig = promotion ? '=' + PROMOTION_PIECES[promotion] || promotion.toUpperCase() : '';
+  
+  return fig + from + '–' + to + promoFig;
+}
+
+function showEvaluation(eval, depth, bestMove) {
+  const box = document.getElementById('evalBox');
+  const srcSpan = document.getElementById('engineSrc');
+  
+  box.innerHTML = `Eval: ${eval} | Profundidad: ${depth} | Mejor jugada: ${bestMove} `;
+  
+  if (srcSpan) {
+    box.appendChild(srcSpan);
+  } else {
+    const src = document.createElement('span');
+    src.id = 'engineSrc';
+    src.className = 'note';
+    box.appendChild(src);
+  }
+}
+
+function showPrincipalVariation(pv) {
+  const tokens = pv.trim().split(/\s+/).slice(0, 80);
+  const display = tokens.map(uciToNice).join(' ');
+  document.getElementById('pvBox').textContent = display || '—';
+}
+
+function scheduleAnalysis() {
+  if (isAnalyzing) return;
+  
+  clearTimeout(analysisTimer);
+  analysisTimer = setTimeout(() => {
+    if (!isAnalyzing) {
+      runAnalysis();
+    }
+  }, CONFIG.ANALYSIS_DELAY);
+}
+
+function runAnalysis() {
+  try {
+    if (isAnalyzing) {
+      setStatus('Análisis en curso...');
+      return;
+    }
+    
+    isAnalyzing = true;
+    ensureEngine();
+    
+    if (!engine) {
+      setStatus('Error: No se pudo inicializar el motor');
+      isAnalyzing = false;
+      return;
+    }
+    
+    lastDepth = 0;
+    lastBest = '';
+    
+    const maxDepth = Math.max(6, Math.min(30, parseInt(document.getElementById('maxDepth').value) || CONFIG.MAX_DEPTH_DESKTOP));
+    const multiPV = Math.max(1, Math.min(3, parseInt(document.getElementById('multipv').value) || 1));
+    const fen = frames[currentIndex] || game.fen();
+    
+    if (!fen || fen.split(' ').length < 4) {
+      setStatus('Error: Posición inválida');
+      isAnalyzing = false;
+      return;
+    }
+    
+    showEvaluation('…', '—', '—');
+    showPrincipalVariation('Pensando…');
+    setStatus('Analizando posición...');
+    
+    // Enviar comandos al motor
+    const commands = [
+      'uci',
+      `setoption name MultiPV value ${multiPV}`,
+      'isready',
+      'ucinewgame',
+      `position fen ${fen}`,
+      `go depth ${maxDepth}`
+    ];
+    
+    commands.forEach((cmd, index) => {
+      setTimeout(() => {
+        if (engine && isAnalyzing) {
+          engine.postMessage(cmd);
+        }
+      }, index * 10);
+    });
+    
+  } catch (error) {
+    log('Error en análisis: ' + error.message, 'error');
+    setStatus('Error en análisis: ' + error.message);
+    isAnalyzing = false;
+  }
+}
+
+// Event listeners para análisis - OPTIMIZADOS
+document.getElementById('goBtn').addEventListener('click', runAnalysis, { passive: true });
+
+document.getElementById('stopBtn').addEventListener('click', () => {
+  if (engine) {
+    engine.postMessage('stop');
+    isAnalyzing = false;
+    setStatus('Análisis detenido');
+  }
+}, { passive: true });
+
+/* ============ INICIALIZACIÓN OPTIMIZADA ============ */
+function initialize() {
+  frames = [game.fen()];
+  currentIndex = 0;
+  render();
+  updateMovesDisplay();
+  
+  // Detectar dispositivo móvil
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  if (isMobile) {
+    document.body.classList.add('mobile');
+    document.getElementById('maxDepth').value = CONFIG.MAX_DEPTH_MOBILE;
+    setStatus('Modo móvil activado');
+  }
+  
+  // Precargar motor en segundo plano
+  setTimeout(() => {
+    try {
+      ensureEngine();
+    } catch (error) {
+      log('No se pudo precargar el motor: ' + error.message, 'warn');
+    }
+  }, 1000);
+  
+  setStatus('Visor PGN listo');
+}
+
+// Event listener para carga - OPTIMIZADO
+window.addEventListener('load', initialize, { passive: true });
+
+// Manejar cambios de visibilidad - OPTIMIZADO
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && isAnalyzing) {
+    if (engine) {
+      engine.postMessage('stop');
+      isAnalyzing = false;
+    }
+  }
+}, { passive: true });
+
+// Manejar errores globales - OPTIMIZADO
+window.addEventListener('error', (event) => {
+  log('Error global: ' + (event.error?.message || event.message), 'error');
+}, { passive: true });
+
+window.addEventListener('unhandledrejection', (event) => {
+  log('Promise rechazada: ' + event.reason, 'error');
+}, { passive: true });
+
+// Prevenir zoom en móviles
+document.addEventListener('touchstart', (e) => {
+  if (e.touches.length > 1) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
+// Optimizar para iframe (GitHub Pages/Hostinger)
+if (window.parent !== window) {
+  document.body.classList.add('iframe-mode');
+  // Ajustar estilos para iframe si es necesario
+}
+</script>
+</body>
+</html>
