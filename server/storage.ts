@@ -1,37 +1,42 @@
-import { type User, type InsertUser } from "@shared/schema";
+import { type Game, type InsertGame, type MoveAnalysis } from "@shared/schema";
 import { randomUUID } from "crypto";
 
-// modify the interface with any CRUD methods
-// you might need
-
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Game storage
+  getGame(id: string): Promise<Game | undefined>;
+  createGame(game: InsertGame): Promise<Game>;
+  
+  // Move analysis cache (optional, for performance)
+  getMoveAnalysis(gameId: string, moveNumber: number): Promise<MoveAnalysis | undefined>;
+  saveMoveAnalysis(gameId: string, analysis: MoveAnalysis): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private games: Map<string, Game>;
+  private analysisCache: Map<string, MoveAnalysis>;
 
   constructor() {
-    this.users = new Map();
+    this.games = new Map();
+    this.analysisCache = new Map();
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getGame(id: string): Promise<Game | undefined> {
+    return this.games.get(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async createGame(insertGame: InsertGame): Promise<Game> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const game: Game = { ...insertGame, id };
+    this.games.set(id, game);
+    return game;
+  }
+
+  async getMoveAnalysis(gameId: string, moveNumber: number): Promise<MoveAnalysis | undefined> {
+    return this.analysisCache.get(`${gameId}-${moveNumber}`);
+  }
+
+  async saveMoveAnalysis(gameId: string, analysis: MoveAnalysis): Promise<void> {
+    this.analysisCache.set(`${gameId}-${analysis.moveNumber}`, analysis);
   }
 }
 
