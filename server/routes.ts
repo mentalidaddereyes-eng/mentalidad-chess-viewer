@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { fetchGameByUrl, fetchGamesByUsername, parsePgnMetadata } from "./lib/lichess";
 import { analyzeMove, answerQuestion } from "./lib/openai";
 import { textToSpeech } from "./lib/elevenlabs";
+import { getStockfishEvaluation } from "./lib/stockfish";
 import { randomUUID } from "crypto";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -51,8 +52,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
-      // Get AI analysis
+      // Get AI analysis first (required)
       const analysis = await analyzeMove(moveNumber, move, fen, []);
+      
+      // Try to get engine evaluation (optional, with timeout)
+      let engineEval: { score?: number; mate?: number; bestMove?: string } | undefined;
+      try {
+        engineEval = await Promise.race([
+          getStockfishEvaluation(fen, 10), // Depth 10 for reasonable speed
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error("Stockfish timeout")), 12000)
+          )
+        ]);
+        console.log("Stockfish evaluation:", engineEval);
+      } catch (engineError) {
+        console.log("Stockfish evaluation skipped:", engineError);
+        // Continue without engine evaluation
+      }
       
       // Generate audio for the analysis
       let audioUrl;
@@ -73,6 +89,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         move,
         fen,
         ...analysis,
+        score: engineEval?.score,
+        mate: engineEval?.mate,
+        bestMove: engineEval?.bestMove,
         audioUrl,
       });
     } catch (error: any) {

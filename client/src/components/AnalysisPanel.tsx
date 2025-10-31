@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, Volume2 } from "lucide-react";
 import { MoveAnalysis } from "@shared/schema";
+import { EvaluationBar } from "./EvaluationBar";
 
 interface AnalysisPanelProps {
   analysis: MoveAnalysis | null;
@@ -41,18 +42,31 @@ export function AnalysisPanel({
       </CardHeader>
       
       <CardContent className="flex-1 flex flex-col gap-4 min-h-0">
+        {/* Position Evaluation Bar */}
+        {analysis && (analysis.score !== undefined || analysis.mate !== undefined) && (
+          <EvaluationBar 
+            score={analysis.score} 
+            mate={analysis.mate}
+          />
+        )}
+
         {/* Current analysis */}
         {analysis ? (
           <div className="space-y-4">
             {/* Move evaluation badge */}
             {analysis.evaluation && (
-              <div>
+              <div className="flex items-center gap-2 flex-wrap">
                 <Badge 
                   className={evaluationConfig[analysis.evaluation].color}
                   data-testid={`badge-evaluation-${analysis.evaluation}`}
                 >
                   {evaluationConfig[analysis.evaluation].label}
                 </Badge>
+                {analysis.bestMove && (
+                  <span className="text-xs text-muted-foreground font-mono">
+                    Best: {analysis.bestMove}
+                  </span>
+                )}
               </div>
             )}
             

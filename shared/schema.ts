@@ -26,6 +26,9 @@ export const moveAnalysisSchema = z.object({
   analysis: z.string(),
   evaluation: z.enum(["brilliant", "good", "inaccuracy", "mistake", "blunder"]).optional(),
   comment: z.string().optional(),
+  score: z.number().optional(), // Centipawn evaluation from engine (positive = white advantage)
+  mate: z.number().optional(), // Mate in N moves (positive = white mates, negative = black mates)
+  bestMove: z.string().optional(), // Best move according to engine
 });
 
 export type MoveAnalysis = z.infer<typeof moveAnalysisSchema>;
