@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Chess } from "chess.js";
-import { ChessBoard } from "@/components/ChessBoard";
+import { InteractiveChessBoard } from "@/components/InteractiveChessBoard";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Trophy, RotateCcw, Eye, Target, ArrowRight } from "lucide-react";
+import { Trophy, RotateCcw, Eye, Target, ArrowRight, CheckCircle2, XCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -16,6 +16,8 @@ export default function Puzzles() {
   const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
   const [showSolution, setShowSolution] = useState(false);
   const [chess] = useState(new Chess());
+  const [currentFen, setCurrentFen] = useState("");
+  const [attemptStatus, setAttemptStatus] = useState<"idle" | "correct" | "incorrect">("idle");
 
   // Fetch puzzles from API
   const { data: puzzles, isLoading } = useQuery<Puzzle[]>({
@@ -43,6 +45,73 @@ export default function Puzzles() {
       });
     },
   });
+
+  // Reset FEN when puzzle changes
+  useEffect(() => {
+    if (puzzles && puzzles[currentPuzzleIndex]) {
+      const puzzle = puzzles[currentPuzzleIndex];
+      try {
+        chess.load(puzzle.fen);
+        setCurrentFen(puzzle.fen);
+        setAttemptStatus("idle");
+      } catch (error) {
+        console.error("Failed to load puzzle FEN:", error);
+      }
+    }
+  }, [currentPuzzleIndex, puzzles, chess]);
+
+  // Handle user move
+  const handleMove = (move: { from: string; to: string }) => {
+    const puzzle = puzzles?.[currentPuzzleIndex];
+    if (!puzzle) return false;
+
+    try {
+      // Try to make the move
+      const result = chess.move({ from: move.from, to: move.to });
+      
+      if (result) {
+        // Update the FEN
+        setCurrentFen(chess.fen());
+        
+        // Check if this is the correct solution
+        const moveNotation = result.san;
+        if (moveNotation === puzzle.solution || result.lan === puzzle.solution) {
+          setAttemptStatus("correct");
+          toast({
+            title: "¡Correcto!",
+            description: "Has resuelto el puzzle correctamente",
+          });
+          return true;
+        } else {
+          setAttemptStatus("incorrect");
+          toast({
+            title: "Incorrecto",
+            description: "Intenta otro movimiento",
+            variant: "destructive",
+          });
+          // Undo the move
+          chess.undo();
+          setCurrentFen(chess.fen());
+          return false;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error("Invalid move:", error);
+      return false;
+    }
+  };
+
+  // Reset puzzle
+  const resetPuzzle = () => {
+    const puzzle = puzzles?.[currentPuzzleIndex];
+    if (puzzle) {
+      chess.load(puzzle.fen);
+      setCurrentFen(puzzle.fen);
+      setAttemptStatus("idle");
+      setShowSolution(false);
+    }
+  };
 
   // Show loading state
   if (isLoading) {
@@ -105,6 +174,7 @@ export default function Puzzles() {
     const nextIndex = (currentPuzzleIndex + 1) % puzzles.length;
     setCurrentPuzzleIndex(nextIndex);
     setShowSolution(false);
+    setAttemptStatus("idle");
   };
 
   const previousPuzzle = () => {
@@ -112,6 +182,7 @@ export default function Puzzles() {
     const prevIndex = (currentPuzzleIndex - 1 + puzzles.length) % puzzles.length;
     setCurrentPuzzleIndex(prevIndex);
     setShowSolution(false);
+    setAttemptStatus("idle");
   };
 
   return (
@@ -144,19 +215,41 @@ export default function Puzzles() {
         <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-6">
           {/* Chess Board */}
           <div className="flex flex-col gap-4">
-            <ChessBoard
-              fen={currentPuzzle.fen}
-              className="w-full max-w-2xl mx-auto"
-              data-testid="puzzle-board"
-            />
+            <div className="relative">
+              <InteractiveChessBoard
+                fen={currentFen || currentPuzzle.fen}
+                onMove={handleMove}
+                showLegalMoves={true}
+                disabled={attemptStatus === "correct"}
+                className="w-full max-w-2xl mx-auto"
+              />
+              
+              {/* Status overlay */}
+              {attemptStatus === "correct" && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-green-500/90 text-white px-6 py-3 rounded-lg flex items-center gap-2 shadow-lg">
+                    <CheckCircle2 className="w-6 h-6" />
+                    <span className="font-bold">¡Correcto!</span>
+                  </div>
+                </div>
+              )}
+            </div>
 
-            <div className="flex gap-2 justify-center">
+            <div className="flex gap-2 justify-center flex-wrap">
               <Button
                 onClick={previousPuzzle}
                 variant="outline"
                 data-testid="button-previous-puzzle"
               >
                 Previous
+              </Button>
+              <Button
+                onClick={resetPuzzle}
+                variant="outline"
+                data-testid="button-reset-puzzle"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset
               </Button>
               <Button
                 onClick={() => setShowSolution(!showSolution)}
