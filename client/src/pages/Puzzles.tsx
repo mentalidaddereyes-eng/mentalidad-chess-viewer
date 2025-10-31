@@ -86,9 +86,10 @@ export default function Puzzles() {
     );
   }
   
-  // Load FEN with error handling (chess.load returns false for invalid FEN)
-  const fenLoaded = chess.load(currentPuzzle.fen);
-  if (!fenLoaded) {
+  // Load FEN with error handling (chess.load throws error for invalid FEN)
+  try {
+    chess.load(currentPuzzle.fen);
+  } catch (error) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <p className="text-destructive">Invalid FEN: {currentPuzzle.fen}</p>

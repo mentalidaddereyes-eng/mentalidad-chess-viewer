@@ -162,12 +162,16 @@ GM Trainer is a sophisticated web application that combines chess game analysis 
 - Database tables: games, move_analyses, users, training_sessions, progress_stats, puzzles, puzzle_attempts
 
 ### Tactics Puzzle Training ✅
+- **Full backend persistence with PostgreSQL**
 - Dedicated Puzzles page with chess tactics
-- 5 sample puzzles covering themes: checkmate patterns, material gain, knight forks, removing defender, tactical exchanges
-- Difficulty ratings: 800-1400
+- Database storage for puzzles and attempts (full CRUD API)
+- 5 sample puzzles with valid FENs: back rank mate, material gain, knight attacks, central control, double attacks
+- Difficulty ratings: 800-1200
 - Show/hide solution with detailed explanations
-- Navigate between puzzles
-- Puzzle database schema ready for expansion
+- Navigate between puzzles with wrap-around
+- Defensive FEN validation (try-catch error handling)
+- Seed endpoint for easy database initialization
+- Ready for expansion: puzzle attempts tracking, performance analytics
 
 ### Coaching Settings & Personalization ✅
 - Dedicated Settings page for user preferences
