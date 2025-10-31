@@ -72,9 +72,10 @@ export const progressStats = pgTable("progress_stats", {
 export const puzzles = pgTable("puzzles", {
   id: serial("id").primaryKey(),
   fen: text("fen").notNull(), // Starting position
-  moves: text("moves").notNull(), // Solution moves in UCI format (e.g., "e2e4 e7e5")
+  solution: text("solution").notNull(), // Solution move(s) (e.g., "Qxf7#" or "Nxe5")
+  explanation: text("explanation"), // Explanation of the puzzle solution
+  theme: varchar("theme", { length: 100 }), // Puzzle theme (e.g., "Knight fork", "Checkmate in 1")
   rating: integer("rating"), // Difficulty rating
-  themes: text("themes"), // Puzzle themes (e.g., "fork,pin,mate-in-2")
   source: varchar("source", { length: 100 }), // lichess, custom, etc.
   externalId: varchar("external_id", { length: 100 }), // ID from external source
   createdAt: timestamp("created_at").defaultNow().notNull(),

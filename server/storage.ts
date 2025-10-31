@@ -1,4 +1,4 @@
-import { type Game, type InsertGame, type MoveAnalysis, type InsertMoveAnalysis, type UserSettings, type InsertUserSettings, games, moveAnalyses, userSettings } from "@shared/schema";
+import { type Game, type InsertGame, type MoveAnalysis, type InsertMoveAnalysis, type UserSettings, type InsertUserSettings, type Puzzle, type InsertPuzzle, type PuzzleAttempt, type InsertPuzzleAttempt, games, moveAnalyses, userSettings, puzzles, puzzleAttempts } from "@shared/schema";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
 
@@ -16,6 +16,15 @@ export interface IStorage {
   // User settings
   getSettings(): Promise<UserSettings | undefined>;
   updateSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings>;
+  
+  // Puzzles
+  getAllPuzzles(): Promise<Puzzle[]>;
+  getPuzzle(id: number): Promise<Puzzle | undefined>;
+  createPuzzle(puzzle: InsertPuzzle): Promise<Puzzle>;
+  
+  // Puzzle attempts
+  createPuzzleAttempt(attempt: InsertPuzzleAttempt): Promise<PuzzleAttempt>;
+  getPuzzleAttempts(puzzleId: number): Promise<PuzzleAttempt[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -87,6 +96,33 @@ export class DbStorage implements IStorage {
         .returning();
       return result[0];
     }
+  }
+
+  async getAllPuzzles(): Promise<Puzzle[]> {
+    return await db.select().from(puzzles).orderBy(puzzles.rating);
+  }
+
+  async getPuzzle(id: number): Promise<Puzzle | undefined> {
+    const result = await db.select().from(puzzles).where(eq(puzzles.id, id)).limit(1);
+    return result[0];
+  }
+
+  async createPuzzle(puzzle: InsertPuzzle): Promise<Puzzle> {
+    const result = await db.insert(puzzles).values(puzzle).returning();
+    return result[0];
+  }
+
+  async createPuzzleAttempt(attempt: InsertPuzzleAttempt): Promise<PuzzleAttempt> {
+    const result = await db.insert(puzzleAttempts).values(attempt).returning();
+    return result[0];
+  }
+
+  async getPuzzleAttempts(puzzleId: number): Promise<PuzzleAttempt[]> {
+    return await db
+      .select()
+      .from(puzzleAttempts)
+      .where(eq(puzzleAttempts.puzzleId, puzzleId))
+      .orderBy(puzzleAttempts.attemptedAt);
   }
 }
 

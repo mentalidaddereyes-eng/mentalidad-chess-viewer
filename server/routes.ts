@@ -7,6 +7,7 @@ import { textToSpeech } from "./lib/elevenlabs";
 import { getStockfishEvaluation } from "./lib/stockfish";
 import { randomUUID } from "crypto";
 import { z } from "zod";
+import { insertPuzzleSchema, insertPuzzleAttemptSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all games
@@ -219,6 +220,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to update settings:", error);
       res.status(500).json({ error: error.message || "Failed to update settings" });
+    }
+  });
+
+  // Get all puzzles
+  app.get("/api/puzzles", async (req, res) => {
+    try {
+      const puzzles = await storage.getAllPuzzles();
+      res.json(puzzles);
+    } catch (error: any) {
+      console.error("Failed to fetch puzzles:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch puzzles" });
+    }
+  });
+
+  // Get a single puzzle
+  app.get("/api/puzzles/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid puzzle ID" });
+      }
+      
+      const puzzle = await storage.getPuzzle(id);
+      if (!puzzle) {
+        return res.status(404).json({ error: "Puzzle not found" });
+      }
+      
+      res.json(puzzle);
+    } catch (error: any) {
+      console.error("Failed to fetch puzzle:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch puzzle" });
+    }
+  });
+
+  // Create a puzzle
+  app.post("/api/puzzles", async (req, res) => {
+    try {
+      const validationResult = insertPuzzleSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid puzzle data", 
+          details: validationResult.error.errors 
+        });
+      }
+      
+      const puzzle = await storage.createPuzzle(validationResult.data);
+      res.json(puzzle);
+    } catch (error: any) {
+      console.error("Failed to create puzzle:", error);
+      res.status(500).json({ error: error.message || "Failed to create puzzle" });
+    }
+  });
+
+  // Record a puzzle attempt
+  app.post("/api/puzzles/:id/attempt", async (req, res) => {
+    try {
+      const puzzleId = parseInt(req.params.id, 10);
+      if (isNaN(puzzleId)) {
+        return res.status(400).json({ error: "Invalid puzzle ID" });
+      }
+      
+      const attemptSchema = z.object({
+        solved: z.number().int().min(0).max(1),
+        timeSpent: z.number().int().nonnegative().optional(),
+        userId: z.number().int().optional().nullable(),
+      });
+      
+      const validationResult = attemptSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid attempt data", 
+          details: validationResult.error.errors 
+        });
+      }
+      
+      const attempt = await storage.createPuzzleAttempt({
+        puzzleId,
+        ...validationResult.data,
+      });
+      
+      res.json(attempt);
+    } catch (error: any) {
+      console.error("Failed to record puzzle attempt:", error);
+      res.status(500).json({ error: error.message || "Failed to record attempt" });
+    }
+  });
+
+  // Seed sample puzzles (for development/testing)
+  app.post("/api/puzzles/seed", async (req, res) => {
+    try {
+      const samplePuzzles = [
+        {
+          fen: "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1",
+          solution: "Qxf7#",
+          explanation: "Scholar's mate! The queen captures on f7 with checkmate.",
+          theme: "Checkmate in 1",
+          rating: 800,
+          source: "custom",
+        },
+        {
+          fen: "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1",
+          solution: "Nxe5",
+          explanation: "The knight takes the pawn on e5, winning material and threatening a fork.",
+          theme: "Material gain",
+          rating: 1000,
+          source: "custom",
+        },
+        {
+          fen: "r2qkb1r/pp2pppp/2p2n2/3pNb2/3P4/2N1P3/PPP2PPP/R1BQKB1R w KQkq - 0 1",
+          solution: "Nxf7",
+          explanation: "Knight fork! Nxf7 attacks both the king and queen.",
+          theme: "Knight fork",
+          rating: 1200,
+          source: "custom",
+        },
+        {
+          fen: "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2BPP3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 1",
+          solution: "Bxf7+",
+          explanation: "Bishop takes f7 with check, forcing the king to move and winning material.",
+          theme: "Removing defender",
+          rating: 1100,
+          source: "custom",
+        },
+        {
+          fen: "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+          solution: "Qxf6",
+          explanation: "The queen captures the knight on f6, threatening the bishop and maintaining pressure.",
+          theme: "Tactical exchange",
+          rating: 1400,
+          source: "custom",
+        },
+      ];
+
+      const createdPuzzles = [];
+      for (const puzzle of samplePuzzles) {
+        const created = await storage.createPuzzle(puzzle);
+        createdPuzzles.push(created);
+      }
+
+      res.json({ 
+        message: `Seeded ${createdPuzzles.length} puzzles`, 
+        puzzles: createdPuzzles 
+      });
+    } catch (error: any) {
+      console.error("Failed to seed puzzles:", error);
+      res.status(500).json({ error: error.message || "Failed to seed puzzles" });
     }
   });
 

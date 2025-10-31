@@ -6,67 +6,109 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Trophy, RotateCcw, Eye, Target, ArrowRight } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-
-// Sample puzzles - in production, these would come from an API
-const SAMPLE_PUZZLES = [
-  {
-    id: 1,
-    fen: "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1",
-    solution: "Qxf7#",
-    explanation: "Scholar's mate! The queen captures on f7 with checkmate.",
-    theme: "Checkmate in 1",
-    rating: 800,
-  },
-  {
-    id: 2,
-    fen: "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1",
-    solution: "Nxe5",
-    explanation: "The knight takes the pawn on e5, winning material and threatening a fork.",
-    theme: "Material gain",
-    rating: 1000,
-  },
-  {
-    id: 3,
-    fen: "r2qkb1r/pp2pppp/2p2n2/3pNb2/3P4/2N1P3/PPP2PPP/R1BQKB1R w KQkq - 0 1",
-    solution: "Nxf7",
-    explanation: "Knight fork! Nxf7 attacks both the king and queen.",
-    theme: "Knight fork",
-    rating: 1200,
-  },
-  {
-    id: 4,
-    fen: "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2BPP3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 1",
-    solution: "Bxf7+",
-    explanation: "Bishop takes f7 with check, forcing the king to move and winning material.",
-    theme: "Removing defender",
-    rating: 1100,
-  },
-  {
-    id: 5,
-    fen: "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
-    solution: "Qxf6",
-    explanation: "The queen captures the knight on f6, threatening the bishop and maintaining pressure.",
-    theme: "Tactical exchange",
-    rating: 1400,
-  },
-];
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Puzzle } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Puzzles() {
+  const { toast } = useToast();
   const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
   const [showSolution, setShowSolution] = useState(false);
   const [chess] = useState(new Chess());
 
-  const currentPuzzle = SAMPLE_PUZZLES[currentPuzzleIndex];
-  chess.load(currentPuzzle.fen);
+  // Fetch puzzles from API
+  const { data: puzzles, isLoading } = useQuery<Puzzle[]>({
+    queryKey: ["/api/puzzles"],
+  });
+
+  // Seed puzzles mutation
+  const seedPuzzlesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/puzzles/seed", {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/puzzles"] });
+      toast({
+        title: "Puzzles Seeded",
+        description: "Sample puzzles have been added to the database",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Seed Puzzles",
+        description: error.message || "Could not seed puzzles",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading puzzles...</p>
+      </div>
+    );
+  }
+
+  // Show seed button if no puzzles
+  if (!puzzles || puzzles.length === 0) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <p className="text-muted-foreground">No puzzles available</p>
+        <Button 
+          onClick={() => seedPuzzlesMutation.mutate()} 
+          disabled={seedPuzzlesMutation.isPending}
+          data-testid="button-seed-puzzles"
+        >
+          {seedPuzzlesMutation.isPending ? "Seeding..." : "Seed Sample Puzzles"}
+        </Button>
+        <Link href="/">
+          <Button variant="outline">Back to Trainer</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const currentPuzzle = puzzles[currentPuzzleIndex];
+  
+  // Defensive: Validate puzzle data before using
+  if (!currentPuzzle?.fen || !currentPuzzle?.solution) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <p className="text-destructive">Invalid puzzle data</p>
+        <Link href="/">
+          <Button variant="outline">Back to Trainer</Button>
+        </Link>
+      </div>
+    );
+  }
+  
+  // Load FEN with error handling (chess.load returns false for invalid FEN)
+  const fenLoaded = chess.load(currentPuzzle.fen);
+  if (!fenLoaded) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <p className="text-destructive">Invalid FEN: {currentPuzzle.fen}</p>
+        <Link href="/">
+          <Button variant="outline">Back to Trainer</Button>
+        </Link>
+      </div>
+    );
+  }
 
   const nextPuzzle = () => {
-    const nextIndex = (currentPuzzleIndex + 1) % SAMPLE_PUZZLES.length;
+    if (!puzzles) return;
+    const nextIndex = (currentPuzzleIndex + 1) % puzzles.length;
     setCurrentPuzzleIndex(nextIndex);
     setShowSolution(false);
   };
 
   const previousPuzzle = () => {
-    const prevIndex = (currentPuzzleIndex - 1 + SAMPLE_PUZZLES.length) % SAMPLE_PUZZLES.length;
+    if (!puzzles) return;
+    const prevIndex = (currentPuzzleIndex - 1 + puzzles.length) % puzzles.length;
     setCurrentPuzzleIndex(prevIndex);
     setShowSolution(false);
   };
@@ -131,13 +173,18 @@ export default function Puzzles() {
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
+            
+            {/* Puzzle count indicator */}
+            <div className="text-center text-sm text-muted-foreground">
+              Puzzle {currentPuzzleIndex + 1} of {puzzles.length}
+            </div>
           </div>
 
           {/* Puzzle Info */}
           <div className="flex flex-col gap-4">
             <Card className="p-6">
               <h2 className="text-xl font-semibold mb-4">
-                Puzzle #{currentPuzzle.id} of {SAMPLE_PUZZLES.length}
+                Puzzle #{currentPuzzleIndex + 1}
               </h2>
               
               <div className="space-y-3">
@@ -196,7 +243,7 @@ export default function Puzzles() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total Puzzles:</span>
-                  <span className="font-medium">{SAMPLE_PUZZLES.length}</span>
+                  <span className="font-medium">{puzzles.length}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Current:</span>
