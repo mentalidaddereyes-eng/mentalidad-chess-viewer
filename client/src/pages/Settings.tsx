@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -22,8 +22,23 @@ export default function Settings() {
   const [verbosity, setVerbosity] = useState(50);
   const [language, setLanguage] = useState("english");
 
+  // Load settings from localStorage on mount
+  useEffect(() => {
+    const savedSettings = localStorage.getItem("gm_trainer_settings");
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setCoachingStyle(settings.coachingStyle || "balanced");
+        setDifficulty(settings.difficulty || 50);
+        setVerbosity(settings.verbosity || 50);
+        setLanguage(settings.language || "english");
+      } catch (error) {
+        console.error("Failed to load settings:", error);
+      }
+    }
+  }, []);
+
   const handleSave = () => {
-    // In production, save to database via API
     localStorage.setItem("gm_trainer_settings", JSON.stringify({
       coachingStyle,
       difficulty,
@@ -33,7 +48,7 @@ export default function Settings() {
 
     toast({
       title: "Settings Saved",
-      description: "Your preferences have been updated",
+      description: "Your coaching preferences will be applied to future analysis",
     });
   };
 

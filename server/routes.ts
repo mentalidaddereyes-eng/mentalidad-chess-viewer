@@ -77,14 +77,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analyze a specific move
   app.post("/api/analysis/move", async (req, res) => {
     try {
-      const { moveNumber, move, fen } = req.body;
+      const { moveNumber, move, fen, settings } = req.body;
       
       if (!moveNumber || !move || !fen) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
       // Get AI analysis first (required)
-      const analysis = await analyzeMove(moveNumber, move, fen, []);
+      const analysis = await analyzeMove(moveNumber, move, fen, [], settings);
       
       // Try to get engine evaluation (optional, with timeout)
       let engineEval: { score?: number; mate?: number; bestMove?: string } | undefined;
@@ -134,14 +134,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Answer a voice question
   app.post("/api/voice/ask", async (req, res) => {
     try {
-      const { question, context } = req.body;
+      const { question, context, settings } = req.body;
       
       if (!question || !context) {
         return res.status(400).json({ error: "Missing question or context" });
       }
 
       // Get AI answer
-      const answer = await answerQuestion(question, context);
+      const answer = await answerQuestion(question, context, settings);
       
       // Generate audio for the answer
       let audioUrl;

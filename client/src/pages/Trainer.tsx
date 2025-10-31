@@ -17,6 +17,24 @@ import { Button } from "@/components/ui/button";
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+// Helper to get user settings from localStorage
+function getUserSettings() {
+  try {
+    const savedSettings = localStorage.getItem("gm_trainer_settings");
+    if (savedSettings) {
+      return JSON.parse(savedSettings);
+    }
+  } catch (error) {
+    console.error("Failed to load settings:", error);
+  }
+  return {
+    coachingStyle: "balanced",
+    difficulty: 50,
+    verbosity: 50,
+    language: "english"
+  };
+}
+
 export default function Trainer() {
   const { toast } = useToast();
   const searchString = useSearch();
@@ -75,7 +93,8 @@ export default function Trainer() {
   // Get move analysis mutation
   const analyzeMoveMutation = useMutation({
     mutationFn: async (moveData: { moveNumber: number; move: string; fen: string }) => {
-      const res = await apiRequest("POST", "/api/analysis/move", moveData);
+      const settings = getUserSettings();
+      const res = await apiRequest("POST", "/api/analysis/move", { ...moveData, settings });
       return await res.json();
     },
     onSuccess: (data: MoveAnalysis & { audioUrl?: string }) => {
@@ -95,6 +114,7 @@ export default function Trainer() {
   // Ask question mutation
   const askQuestionMutation = useMutation({
     mutationFn: async (question: string) => {
+      const settings = getUserSettings();
       const res = await apiRequest("POST", "/api/voice/ask", {
         question,
         context: {
@@ -102,6 +122,7 @@ export default function Trainer() {
           fen,
           moveHistory,
         },
+        settings,
       });
       return await res.json();
     },
