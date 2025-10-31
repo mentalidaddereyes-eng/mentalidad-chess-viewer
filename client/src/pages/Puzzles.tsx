@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Chess } from "chess.js";
 import { InteractiveChessBoard } from "@/components/InteractiveChessBoard";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Trophy, RotateCcw, Eye, Target, ArrowRight, CheckCircle2, XCircle } from "lucide-react";
+import { Trophy, RotateCcw, Eye, Target, ArrowRight, CheckCircle2, XCircle, BarChart3, Download } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -18,6 +18,7 @@ export default function Puzzles() {
   const [chess] = useState(new Chess());
   const [currentFen, setCurrentFen] = useState("");
   const [attemptStatus, setAttemptStatus] = useState<"idle" | "correct" | "incorrect">("idle");
+  const startTimeRef = useRef<number>(Date.now());
 
   // Fetch puzzles from API
   const { data: puzzles, isLoading } = useQuery<Puzzle[]>({
@@ -46,6 +47,43 @@ export default function Puzzles() {
     },
   });
 
+  // Record puzzle attempt mutation
+  const recordAttemptMutation = useMutation({
+    mutationFn: async ({ puzzleId, solved, timeSpent }: { puzzleId: number; solved: number; timeSpent: number }) => {
+      const res = await apiRequest("POST", `/api/puzzles/${puzzleId}/attempt`, {
+        solved,
+        timeSpent,
+        userId: null,
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/puzzles"] });
+    },
+  });
+
+  // Import daily puzzle from Lichess
+  const importDailyPuzzleMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/puzzles/import-daily", {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/puzzles"] });
+      toast({
+        title: "Puzzle Imported",
+        description: "Daily puzzle from Lichess has been imported successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Import Puzzle",
+        description: error.message || "Could not import daily puzzle from Lichess",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Reset FEN when puzzle changes
   useEffect(() => {
     if (puzzles && puzzles[currentPuzzleIndex]) {
@@ -54,6 +92,7 @@ export default function Puzzles() {
         chess.load(puzzle.fen);
         setCurrentFen(puzzle.fen);
         setAttemptStatus("idle");
+        startTimeRef.current = Date.now(); // Reset timer for new puzzle
       } catch (error) {
         console.error("Failed to load puzzle FEN:", error);
       }
@@ -63,41 +102,76 @@ export default function Puzzles() {
   // Handle user move
   const handleMove = (move: { from: string; to: string }) => {
     const puzzle = puzzles?.[currentPuzzleIndex];
-    if (!puzzle) return false;
+    if (!puzzle) {
+      console.log("No puzzle available");
+      return false;
+    }
+
+    console.log("Attempting move:", move, "Expected solution:", puzzle.solution);
 
     try {
       // Try to make the move
       const result = chess.move({ from: move.from, to: move.to });
       
       if (result) {
-        // Update the FEN
+        console.log("Move made successfully:", result.san, "FEN:", chess.fen());
+        
+        // Update the FEN first
         setCurrentFen(chess.fen());
         
         // Check if this is the correct solution
         const moveNotation = result.san;
-        if (moveNotation === puzzle.solution || result.lan === puzzle.solution) {
+        console.log("Comparing:", moveNotation, "vs", puzzle.solution);
+        
+        if (moveNotation === puzzle.solution || result.lan === puzzle.solution || result.from + result.to === puzzle.solution) {
           setAttemptStatus("correct");
+          
+          // Calculate time spent
+          const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
+          
+          // Record successful attempt
+          recordAttemptMutation.mutate({
+            puzzleId: puzzle.id,
+            solved: 1,
+            timeSpent,
+          });
+          
           toast({
             title: "¡Correcto!",
-            description: "Has resuelto el puzzle correctamente",
+            description: `Has resuelto el puzzle en ${timeSpent} segundos`,
           });
           return true;
         } else {
+          // Calculate time spent
+          const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
+          
+          // Record failed attempt
+          recordAttemptMutation.mutate({
+            puzzleId: puzzle.id,
+            solved: 0,
+            timeSpent,
+          });
+          
+          // Don't undo immediately - let the user see their move
+          setTimeout(() => {
+            chess.undo();
+            setCurrentFen(chess.fen());
+            setAttemptStatus("idle");
+          }, 1000);
+          
           setAttemptStatus("incorrect");
           toast({
             title: "Incorrecto",
-            description: "Intenta otro movimiento",
+            description: `Intentaste ${moveNotation}, pero la solución es diferente`,
             variant: "destructive",
           });
-          // Undo the move
-          chess.undo();
-          setCurrentFen(chess.fen());
           return false;
         }
       }
+      console.log("Move failed - chess.move returned null");
       return false;
     } catch (error) {
-      console.error("Invalid move:", error);
+      console.error("Invalid move error:", error);
       return false;
     }
   };
@@ -199,6 +273,12 @@ export default function Puzzles() {
             </div>
             
             <div className="flex items-center gap-4">
+              <Link href="/stats">
+                <Button variant="outline" data-testid="button-view-stats">
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  View Progress
+                </Button>
+              </Link>
               <Link href="/">
                 <Button variant="outline" data-testid="button-back-to-trainer">
                   Back to Trainer
@@ -265,6 +345,15 @@ export default function Puzzles() {
               >
                 Next
                 <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+              <Button
+                onClick={() => importDailyPuzzleMutation.mutate()}
+                variant="default"
+                disabled={importDailyPuzzleMutation.isPending}
+                data-testid="button-import-lichess"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {importDailyPuzzleMutation.isPending ? "Importing..." : "Import from Lichess"}
               </Button>
             </div>
             

@@ -172,11 +172,13 @@ GM Trainer is a sophisticated web application that combines chess game analysis 
 - **Move validation** - Automatically checks if solution is correct
 - **Visual feedback** - "¡Correcto!" overlay on successful solve
 - **Reset functionality** - Try puzzles multiple times
+- **Automatic attempt tracking** - Records success/failure with time spent
 - Show/hide solution with detailed explanations
 - Navigate between puzzles with wrap-around
 - Defensive FEN validation (try-catch error handling)
 - Seed endpoint for easy database initialization
-- Ready for expansion: puzzle attempts tracking, performance analytics
+- **Lichess API integration** - Import daily puzzle with one click
+- **Progress statistics page** - Track performance over time
 
 ### Coaching Settings & Personalization ✅
 - Dedicated Settings page for user preferences
@@ -193,12 +195,47 @@ GM Trainer is a sophisticated web application that combines chess game analysis 
 - Best move suggestions from engine
 - Fixed dark mode rendering for clear visualization
 
+### Progress Tracking & Analytics (NEW - October 31, 2025) ✅
+- **Automatic puzzle attempt tracking**
+  - Records every puzzle attempt with success/failure status
+  - Tracks time spent on each puzzle (in seconds)
+  - Timestamps for all attempts
+- **Comprehensive statistics page** (`/stats`)
+  - Total attempts and puzzles solved
+  - Success rate percentage
+  - Average time per puzzle
+  - Recent performance (last 10 attempts)
+  - Daily activity charts (last 7 days)
+  - Recent attempts list with details
+- **API Endpoints**:
+  - `POST /api/puzzles/:id/attempt` - Record puzzle attempt
+  - `GET /api/stats/puzzles` - Get aggregated statistics
+  - `GET /api/puzzle-attempts` - Get all attempts
+- **Smart move validation**
+  - Supports multiple notation formats (SAN, LAN, from-to)
+  - Improved logging for debugging
+  - Delay before undoing incorrect moves (1 second visual feedback)
+
+### Lichess Integration (NEW - October 31, 2025) ✅
+- **Daily puzzle import**
+  - One-click import from Lichess API
+  - Parses PGN to generate correct FEN at puzzle position
+  - Extracts solution moves, themes, and difficulty rating
+  - Saves to local database for offline solving
+- **API Endpoint**: `POST /api/puzzles/import-daily`
+- **UI Integration**: "Import from Lichess" button in Puzzles page
+- **Smart data mapping**:
+  - Lichess themes → local theme categories
+  - Lichess rating → difficulty level
+  - Puzzle ID tracking to avoid duplicates (externalId field)
+
 ## Future Enhancements
 - Opening repertoire training mode with spaced repetition
 - Endgame practice mode with theoretical positions
 - Full database integration for user settings
-- Puzzle attempt tracking and performance analytics
-- Interactive puzzle mode (drag-and-drop moves)
-- Lichess puzzle API integration
+- Puzzle filters by difficulty and theme
+- Leaderboard for puzzle solving competition
+- Import multiple puzzles at once from Lichess
+- Bulk puzzle import from Lichess database
 - Game annotation export
 - Multi-game analysis and comparison

@@ -25,6 +25,13 @@ export interface IStorage {
   // Puzzle attempts
   createPuzzleAttempt(attempt: InsertPuzzleAttempt): Promise<PuzzleAttempt>;
   getPuzzleAttempts(puzzleId: number): Promise<PuzzleAttempt[]>;
+  getAllPuzzleAttempts(): Promise<PuzzleAttempt[]>;
+  getPuzzleStats(): Promise<{
+    totalAttempts: number;
+    totalSolved: number;
+    successRate: number;
+    averageTime: number;
+  }>;
 }
 
 export class DbStorage implements IStorage {
@@ -123,6 +130,38 @@ export class DbStorage implements IStorage {
       .from(puzzleAttempts)
       .where(eq(puzzleAttempts.puzzleId, puzzleId))
       .orderBy(puzzleAttempts.attemptedAt);
+  }
+
+  async getAllPuzzleAttempts(): Promise<PuzzleAttempt[]> {
+    return await db
+      .select()
+      .from(puzzleAttempts)
+      .orderBy(puzzleAttempts.attemptedAt);
+  }
+
+  async getPuzzleStats(): Promise<{
+    totalAttempts: number;
+    totalSolved: number;
+    successRate: number;
+    averageTime: number;
+  }> {
+    const attempts = await this.getAllPuzzleAttempts();
+    
+    const totalAttempts = attempts.length;
+    const totalSolved = attempts.filter(a => a.solved === 1).length;
+    const successRate = totalAttempts > 0 ? (totalSolved / totalAttempts) * 100 : 0;
+    
+    const attemptsWithTime = attempts.filter(a => a.timeSpent !== null && a.timeSpent !== undefined);
+    const averageTime = attemptsWithTime.length > 0
+      ? attemptsWithTime.reduce((sum, a) => sum + (a.timeSpent || 0), 0) / attemptsWithTime.length
+      : 0;
+    
+    return {
+      totalAttempts,
+      totalSolved,
+      successRate: Math.round(successRate * 10) / 10,
+      averageTime: Math.round(averageTime * 10) / 10,
+    };
   }
 }
 

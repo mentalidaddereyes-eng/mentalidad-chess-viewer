@@ -309,6 +309,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get puzzle statistics
+  app.get("/api/stats/puzzles", async (req, res) => {
+    try {
+      const stats = await storage.getPuzzleStats();
+      res.json(stats);
+    } catch (error: any) {
+      console.error("Failed to fetch puzzle stats:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch stats" });
+    }
+  });
+
+  // Get all puzzle attempts
+  app.get("/api/puzzle-attempts", async (req, res) => {
+    try {
+      const attempts = await storage.getAllPuzzleAttempts();
+      res.json(attempts);
+    } catch (error: any) {
+      console.error("Failed to fetch puzzle attempts:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch attempts" });
+    }
+  });
+
+  // Import daily puzzle from Lichess
+  app.post("/api/puzzles/import-daily", async (req, res) => {
+    try {
+      // Fetch daily puzzle from Lichess
+      const response = await fetch("https://lichess.org/api/puzzle/daily");
+      if (!response.ok) {
+        throw new Error(`Lichess API error: ${response.statusText}`);
+      }
+      
+      const lichessPuzzle = await response.json() as any;
+      
+      // Parse PGN to get FEN at initial ply
+      const { Chess } = await import("chess.js");
+      const chess = new Chess();
+      
+      // Load the complete PGN
+      const pgn = lichessPuzzle.game?.pgn || "";
+      const initialPly = lichessPuzzle.puzzle?.initialPly || 0;
+      
+      try {
+        // Load the full PGN (strict: false allows some invalid PGN formats)
+        chess.loadPgn(pgn, { strict: false });
+        
+        // Get move history and total moves
+        const history = chess.history();
+        const totalMoves = history.length;
+        
+        // Validate that we have enough moves
+        if (initialPly > totalMoves) {
+          throw new Error(`Initial ply (${initialPly}) exceeds total moves (${totalMoves})`);
+        }
+        
+        // Undo moves to get to the puzzle starting position
+        const movesToUndo = totalMoves - initialPly;
+        for (let i = 0; i < movesToUndo; i++) {
+          chess.undo();
+        }
+      } catch (error: any) {
+        console.error("Failed to parse PGN from Lichess:", error);
+        throw new Error(`Cannot parse puzzle PGN: ${error.message}`);
+      }
+      
+      const fen = chess.fen();
+      
+      // Extract puzzle data
+      const puzzle = {
+        fen,
+        solution: lichessPuzzle.puzzle?.solution?.[0] || "", // First move of solution
+        explanation: `Lichess daily puzzle (#${lichessPuzzle.puzzle?.id || "N/A"}). Themes: ${lichessPuzzle.puzzle?.themes?.join(", ") || "Mixed"}`,
+        theme: lichessPuzzle.puzzle?.themes?.[0] || "Mixed",
+        rating: lichessPuzzle.puzzle?.rating || 1500,
+        source: "lichess",
+        externalId: lichessPuzzle.puzzle?.id || null,
+      };
+      
+      // Save to database
+      const validationResult = insertPuzzleSchema.safeParse(puzzle);
+      
+      if (!validationResult.success) {
+        console.error("Validation failed for puzzle:", puzzle);
+        console.error("Validation errors:", validationResult.error.errors);
+        return res.status(400).json({ 
+          error: "Invalid puzzle data from Lichess", 
+          details: validationResult.error.errors 
+        });
+      }
+      
+      const savedPuzzle = await storage.createPuzzle(validationResult.data);
+      res.json(savedPuzzle);
+    } catch (error: any) {
+      console.error("Failed to import daily puzzle:", error);
+      res.status(500).json({ error: error.message || "Failed to import daily puzzle" });
+    }
+  });
+
   // Seed sample puzzles (for development/testing)
   app.post("/api/puzzles/seed", async (req, res) => {
     try {

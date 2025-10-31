@@ -7,6 +7,7 @@ import Trainer from "@/pages/Trainer";
 import History from "@/pages/History";
 import Puzzles from "@/pages/Puzzles";
 import Settings from "@/pages/Settings";
+import Stats from "@/pages/Stats";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/history" component={History} />
       <Route path="/puzzles" component={Puzzles} />
       <Route path="/settings" component={Settings} />
+      <Route path="/stats" component={Stats} />
       <Route component={NotFound} />
     </Switch>
   );
