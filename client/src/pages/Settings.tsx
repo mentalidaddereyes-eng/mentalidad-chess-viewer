@@ -14,6 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { UserSettings } from "@shared/schema";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -22,33 +25,59 @@ export default function Settings() {
   const [verbosity, setVerbosity] = useState(50);
   const [language, setLanguage] = useState("english");
 
-  // Load settings from localStorage on mount
+  // Load settings from API
+  const { data: settingsData, isLoading } = useQuery<UserSettings>({
+    queryKey: ["/api/settings"],
+  });
+
+  // Update local state when settings load from API
   useEffect(() => {
-    const savedSettings = localStorage.getItem("gm_trainer_settings");
-    if (savedSettings) {
-      try {
-        const settings = JSON.parse(savedSettings);
-        setCoachingStyle(settings.coachingStyle || "balanced");
-        setDifficulty(settings.difficulty || 50);
-        setVerbosity(settings.verbosity || 50);
-        setLanguage(settings.language || "english");
-      } catch (error) {
-        console.error("Failed to load settings:", error);
-      }
+    if (settingsData) {
+      setCoachingStyle(settingsData.coachingStyle || "balanced");
+      setDifficulty(settingsData.difficulty ?? 50);
+      setVerbosity(settingsData.verbosity ?? 50);
+      setLanguage(settingsData.language || "english");
     }
-  }, []);
+  }, [settingsData]);
+
+  // Save settings mutation
+  const saveSettingsMutation = useMutation({
+    mutationFn: async (settings: { coachingStyle: string; difficulty: number; verbosity: number; language: string }) => {
+      const res = await apiRequest("PUT", "/api/settings", settings);
+      return await res.json();
+    },
+    onSuccess: () => {
+      // Also save to localStorage for offline access
+      localStorage.setItem("gm_trainer_settings", JSON.stringify({
+        coachingStyle,
+        difficulty,
+        verbosity,
+        language,
+      }));
+      
+      // Invalidate settings cache
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      
+      toast({
+        title: "Settings Saved",
+        description: "Your coaching preferences will be applied to future analysis",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Save Settings",
+        description: error.message || "Could not save your preferences",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSave = () => {
-    localStorage.setItem("gm_trainer_settings", JSON.stringify({
+    saveSettingsMutation.mutate({
       coachingStyle,
       difficulty,
       verbosity,
       language,
-    }));
-
-    toast({
-      title: "Settings Saved",
-      description: "Your coaching preferences will be applied to future analysis",
     });
   };
 
@@ -180,9 +209,14 @@ export default function Settings() {
 
           {/* Save Button */}
           <div className="flex justify-end">
-            <Button onClick={handleSave} size="lg" data-testid="button-save-settings">
+            <Button 
+              onClick={handleSave} 
+              size="lg" 
+              data-testid="button-save-settings"
+              disabled={saveSettingsMutation.isPending || isLoading}
+            >
               <Save className="w-4 h-4 mr-2" />
-              Save Settings
+              {saveSettingsMutation.isPending ? "Saving..." : "Save Settings"}
             </Button>
           </div>
         </div>

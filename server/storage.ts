@@ -1,4 +1,4 @@
-import { type Game, type InsertGame, type MoveAnalysis, type InsertMoveAnalysis, games, moveAnalyses } from "@shared/schema";
+import { type Game, type InsertGame, type MoveAnalysis, type InsertMoveAnalysis, type UserSettings, type InsertUserSettings, games, moveAnalyses, userSettings } from "@shared/schema";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
 
@@ -12,6 +12,10 @@ export interface IStorage {
   getMoveAnalysis(gameId: number, moveNumber: number): Promise<MoveAnalysis | undefined>;
   saveMoveAnalysis(analysis: InsertMoveAnalysis): Promise<MoveAnalysis>;
   getGameAnalyses(gameId: number): Promise<MoveAnalysis[]>;
+  
+  // User settings
+  getSettings(): Promise<UserSettings | undefined>;
+  updateSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings>;
 }
 
 export class DbStorage implements IStorage {
@@ -49,6 +53,40 @@ export class DbStorage implements IStorage {
       .from(moveAnalyses)
       .where(eq(moveAnalyses.gameId, gameId))
       .orderBy(moveAnalyses.moveNumber);
+  }
+
+  async getSettings(): Promise<UserSettings | undefined> {
+    // Get the first settings record (global settings for now)
+    const result = await db.select().from(userSettings).limit(1);
+    return result[0];
+  }
+
+  async updateSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings> {
+    // Check if settings exist
+    const existing = await this.getSettings();
+    
+    if (existing) {
+      // Update existing settings
+      const result = await db
+        .update(userSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(userSettings.id, existing.id))
+        .returning();
+      return result[0];
+    } else {
+      // Create new settings record
+      const result = await db
+        .insert(userSettings)
+        .values({
+          userId: null,
+          coachingStyle: settings.coachingStyle || "balanced",
+          difficulty: settings.difficulty ?? 50,
+          verbosity: settings.verbosity ?? 50,
+          language: settings.language || "english",
+        })
+        .returning();
+      return result[0];
+    }
   }
 }
 

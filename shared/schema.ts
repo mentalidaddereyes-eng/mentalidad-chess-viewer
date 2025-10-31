@@ -90,6 +90,17 @@ export const puzzleAttempts = pgTable("puzzle_attempts", {
   attemptedAt: timestamp("attempted_at").defaultNow().notNull(),
 });
 
+// User settings table - stores coaching preferences
+export const userSettings = pgTable("user_settings", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  coachingStyle: varchar("coaching_style", { length: 50 }).notNull().default("balanced"),
+  difficulty: integer("difficulty").notNull().default(50),
+  verbosity: integer("verbosity").notNull().default(50),
+  language: varchar("language", { length: 20 }).notNull().default("english"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // ============================================================================
 // Insert Schemas (Zod validation)
 // ============================================================================
@@ -136,6 +147,12 @@ export const insertPuzzleAttemptSchema = createInsertSchema(puzzleAttempts).omit
 });
 export type InsertPuzzleAttempt = z.infer<typeof insertPuzzleAttemptSchema>;
 
+export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({ 
+  id: true, 
+  updatedAt: true 
+});
+export type InsertUserSettings = z.infer<typeof insertUserSettingsSchema>;
+
 // ============================================================================
 // Select Types (TypeScript types for queried data)
 // ============================================================================
@@ -147,6 +164,7 @@ export type TrainingSession = typeof trainingSessions.$inferSelect;
 export type ProgressStat = typeof progressStats.$inferSelect;
 export type Puzzle = typeof puzzles.$inferSelect;
 export type PuzzleAttempt = typeof puzzleAttempts.$inferSelect;
+export type UserSettings = typeof userSettings.$inferSelect;
 
 // ============================================================================
 // API Request/Response Schemas (for routes that don't map to tables)

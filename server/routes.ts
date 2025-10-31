@@ -6,6 +6,7 @@ import { analyzeMove, answerQuestion } from "./lib/openai";
 import { textToSpeech } from "./lib/elevenlabs";
 import { getStockfishEvaluation } from "./lib/stockfish";
 import { randomUUID } from "crypto";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all games
@@ -160,6 +161,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Voice question error:", error);
       res.status(500).json({ error: error.message || "Failed to answer question" });
+    }
+  });
+
+  // Get user settings
+  app.get("/api/settings", async (req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      
+      // Return default settings if none exist
+      if (!settings) {
+        return res.json({
+          coachingStyle: "balanced",
+          difficulty: 50,
+          verbosity: 50,
+          language: "english",
+        });
+      }
+      
+      res.json(settings);
+    } catch (error: any) {
+      console.error("Failed to fetch settings:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch settings" });
+    }
+  });
+
+  // Update user settings
+  app.put("/api/settings", async (req, res) => {
+    try {
+      // Validate request body with Zod schema
+      const settingsSchema = z.object({
+        coachingStyle: z.enum(["aggressive", "positional", "tactical", "balanced", "defensive"]).optional(),
+        difficulty: z.number().min(0).max(100).optional(),
+        verbosity: z.number().min(0).max(100).optional(),
+        language: z.enum(["english", "spanish", "french", "german", "russian"]).optional(),
+      });
+      
+      const validationResult = settingsSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid settings data", 
+          details: validationResult.error.errors 
+        });
+      }
+      
+      const { coachingStyle, difficulty, verbosity, language } = validationResult.data;
+      
+      const settings = await storage.updateSettings({
+        coachingStyle,
+        difficulty,
+        verbosity,
+        language,
+      });
+      
+      res.json(settings);
+    } catch (error: any) {
+      console.error("Failed to update settings:", error);
+      res.status(500).json({ error: error.message || "Failed to update settings" });
     }
   });
 
