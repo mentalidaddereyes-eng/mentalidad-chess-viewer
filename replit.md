@@ -229,11 +229,34 @@ GM Trainer is a sophisticated web application that combines chess game analysis 
   - Lichess rating → difficulty level
   - Puzzle ID tracking to avoid duplicates (externalId field)
 
+### Puzzle Filters (NEW - October 31, 2025) ✅
+- **Collapsible filter panel** in Puzzles page
+  - Toggle button in header shows active filter count
+  - Smooth expand/collapse animation
+- **Difficulty range filter**
+  - Slider control for rating range (600-1400)
+  - Visual labels: Beginner to Advanced
+  - Step size: 50 rating points
+- **Theme filters**
+  - Multi-select checkboxes for 9 tactical themes
+  - Available themes: Back rank mate, Material gain, Knight attack, Central control, Double attack, Fork, Pin, Skewer, Discovered attack
+  - Clear individual or all theme selections
+- **Real-time filtering**
+  - React Query automatically refetches on filter change
+  - Shows filtered puzzle count
+  - "Clear All Filters" button to reset
+- **Backend validation**
+  - Strict integer validation for ratings (rejects decimals like 750.5)
+  - Rejects malformed query parameters (e.g., "800abc")
+  - Handles both comma-separated and repeated query params
+  - Cross-validation: minRating ≤ maxRating
+  - Returns 400 errors with clear messages for invalid inputs
+- **API Endpoint**: `GET /api/puzzles?minRating=800&maxRating=1200&themes=Fork,Pin`
+
 ## Future Enhancements
 - Opening repertoire training mode with spaced repetition
 - Endgame practice mode with theoretical positions
 - Full database integration for user settings
-- Puzzle filters by difficulty and theme
 - Leaderboard for puzzle solving competition
 - Import multiple puzzles at once from Lichess
 - Bulk puzzle import from Lichess database
