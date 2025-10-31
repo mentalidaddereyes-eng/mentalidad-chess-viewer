@@ -1,24 +1,158 @@
+import { pgTable, serial, varchar, text, integer, timestamp, json } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Chess game data model
-export const gameSchema = z.object({
-  id: z.string(),
-  pgn: z.string(),
-  white: z.string(),
-  black: z.string(),
-  result: z.string().optional(),
-  date: z.string().optional(),
-  event: z.string().optional(),
-  site: z.string().optional(),
-  opening: z.string().optional(),
+// ============================================================================
+// Database Tables
+// ============================================================================
+
+// Games table - stores imported chess games
+export const games = pgTable("games", {
+  id: serial("id").primaryKey(),
+  pgn: text("pgn").notNull(),
+  white: varchar("white", { length: 255 }).notNull(),
+  black: varchar("black", { length: 255 }).notNull(),
+  result: varchar("result", { length: 20 }),
+  date: varchar("date", { length: 50 }),
+  event: varchar("event", { length: 255 }),
+  site: varchar("site", { length: 255 }),
+  opening: varchar("opening", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export type Game = z.infer<typeof gameSchema>;
+// Move analyses table - caches AI analysis and engine evaluations
+export const moveAnalyses = pgTable("move_analyses", {
+  id: serial("id").primaryKey(),
+  gameId: integer("game_id").notNull().references(() => games.id, { onDelete: "cascade" }),
+  moveNumber: integer("move_number").notNull(),
+  move: varchar("move", { length: 20 }).notNull(),
+  fen: text("fen").notNull(),
+  analysis: text("analysis").notNull(),
+  evaluation: varchar("evaluation", { length: 20 }), // brilliant, good, inaccuracy, mistake, blunder
+  comment: text("comment"),
+  score: integer("score"), // Centipawn evaluation (positive = white advantage)
+  mate: integer("mate"), // Mate in N moves (positive = white mates, negative = black mates)
+  bestMove: varchar("best_move", { length: 20 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
-export const insertGameSchema = gameSchema.omit({ id: true });
+// Users table - for future authentication and personalization
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: varchar("username", { length: 100 }).notNull().unique(),
+  email: varchar("email", { length: 255 }),
+  lichessUsername: varchar("lichess_username", { length: 100 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Training sessions table - tracks when users practice
+export const trainingSessions = pgTable("training_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  gameId: integer("game_id").references(() => games.id, { onDelete: "cascade" }),
+  sessionType: varchar("session_type", { length: 50 }).notNull(), // analysis, puzzles, opening, endgame
+  duration: integer("duration"), // Session duration in seconds
+  movesAnalyzed: integer("moves_analyzed"),
+  questionsAsked: integer("questions_asked"),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  endedAt: timestamp("ended_at"),
+});
+
+// Progress stats table - tracks user improvement metrics
+export const progressStats = pgTable("progress_stats", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  statType: varchar("stat_type", { length: 50 }).notNull(), // rating, puzzles_solved, accuracy, etc.
+  value: integer("value").notNull(),
+  metadata: json("metadata"), // Additional context (e.g., opening name, puzzle theme)
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+});
+
+// Puzzles table - stores chess tactics puzzles
+export const puzzles = pgTable("puzzles", {
+  id: serial("id").primaryKey(),
+  fen: text("fen").notNull(), // Starting position
+  moves: text("moves").notNull(), // Solution moves in UCI format (e.g., "e2e4 e7e5")
+  rating: integer("rating"), // Difficulty rating
+  themes: text("themes"), // Puzzle themes (e.g., "fork,pin,mate-in-2")
+  source: varchar("source", { length: 100 }), // lichess, custom, etc.
+  externalId: varchar("external_id", { length: 100 }), // ID from external source
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Puzzle attempts table - tracks user puzzle solving history
+export const puzzleAttempts = pgTable("puzzle_attempts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  puzzleId: integer("puzzle_id").notNull().references(() => puzzles.id, { onDelete: "cascade" }),
+  solved: integer("solved").notNull(), // 1 = solved, 0 = failed
+  timeSpent: integer("time_spent"), // Time in seconds
+  attemptedAt: timestamp("attempted_at").defaultNow().notNull(),
+});
+
+// ============================================================================
+// Insert Schemas (Zod validation)
+// ============================================================================
+
+export const insertGameSchema = createInsertSchema(games).omit({ 
+  id: true, 
+  createdAt: true 
+});
 export type InsertGame = z.infer<typeof insertGameSchema>;
 
-// Move analysis data model
+export const insertMoveAnalysisSchema = createInsertSchema(moveAnalyses).omit({ 
+  id: true, 
+  createdAt: true 
+});
+export type InsertMoveAnalysis = z.infer<typeof insertMoveAnalysisSchema>;
+
+export const insertUserSchema = createInsertSchema(users).omit({ 
+  id: true, 
+  createdAt: true 
+});
+export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export const insertTrainingSessionSchema = createInsertSchema(trainingSessions).omit({ 
+  id: true, 
+  startedAt: true 
+});
+export type InsertTrainingSession = z.infer<typeof insertTrainingSessionSchema>;
+
+export const insertProgressStatSchema = createInsertSchema(progressStats).omit({ 
+  id: true, 
+  recordedAt: true 
+});
+export type InsertProgressStat = z.infer<typeof insertProgressStatSchema>;
+
+export const insertPuzzleSchema = createInsertSchema(puzzles).omit({ 
+  id: true, 
+  createdAt: true 
+});
+export type InsertPuzzle = z.infer<typeof insertPuzzleSchema>;
+
+export const insertPuzzleAttemptSchema = createInsertSchema(puzzleAttempts).omit({ 
+  id: true, 
+  attemptedAt: true 
+});
+export type InsertPuzzleAttempt = z.infer<typeof insertPuzzleAttemptSchema>;
+
+// ============================================================================
+// Select Types (TypeScript types for queried data)
+// ============================================================================
+
+export type Game = typeof games.$inferSelect;
+export type MoveAnalysis = typeof moveAnalyses.$inferSelect;
+export type User = typeof users.$inferSelect;
+export type TrainingSession = typeof trainingSessions.$inferSelect;
+export type ProgressStat = typeof progressStats.$inferSelect;
+export type Puzzle = typeof puzzles.$inferSelect;
+export type PuzzleAttempt = typeof puzzleAttempts.$inferSelect;
+
+// ============================================================================
+// API Request/Response Schemas (for routes that don't map to tables)
+// ============================================================================
+
+// Move analysis data model (for API responses)
 export const moveAnalysisSchema = z.object({
   moveNumber: z.number(),
   move: z.string(),
@@ -26,12 +160,10 @@ export const moveAnalysisSchema = z.object({
   analysis: z.string(),
   evaluation: z.enum(["brilliant", "good", "inaccuracy", "mistake", "blunder"]).optional(),
   comment: z.string().optional(),
-  score: z.number().optional(), // Centipawn evaluation from engine (positive = white advantage)
-  mate: z.number().optional(), // Mate in N moves (positive = white mates, negative = black mates)
-  bestMove: z.string().optional(), // Best move according to engine
+  score: z.number().optional(),
+  mate: z.number().optional(),
+  bestMove: z.string().optional(),
 });
-
-export type MoveAnalysis = z.infer<typeof moveAnalysisSchema>;
 
 // Voice interaction data model
 export const voiceQuestionSchema = z.object({

@@ -11,12 +11,18 @@ import { useToast } from "@/hooks/use-toast";
 import { Game, MoveAnalysis } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Trophy } from "lucide-react";
+import { Trophy, History, Target, Settings } from "lucide-react";
+import { Link, useSearch } from "wouter";
+import { Button } from "@/components/ui/button";
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 export default function Trainer() {
   const { toast } = useToast();
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString);
+  const gameIdParam = searchParams.get("gameId");
+  
   const [chess] = useState(new Chess());
   const [game, setGame] = useState<Game | null>(null);
   const [currentMove, setCurrentMove] = useState(0);
@@ -27,6 +33,12 @@ export default function Trainer() {
   const [currentAnalysis, setCurrentAnalysis] = useState<MoveAnalysis | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [lastQuestion, setLastQuestion] = useState<string>();
+
+  // Load game from history if gameId is in URL
+  const { data: loadedGame } = useQuery<Game>({
+    queryKey: [`/api/games/${gameIdParam}`],
+    enabled: !!gameIdParam,
+  });
 
   // Load game mutation
   const loadGameMutation = useMutation({
@@ -162,6 +174,22 @@ export default function Trainer() {
     return () => clearTimeout(timer);
   }, [isAutoPlaying, currentMove, moveHistory.length]);
 
+  // Load game from database when fetched via URL parameter
+  useEffect(() => {
+    if (loadedGame && loadedGame.pgn) {
+      chess.loadPgn(loadedGame.pgn);
+      const moves = chess.history();
+      chess.reset();
+      
+      setGame(loadedGame);
+      setMoveHistory(moves);
+      setCurrentMove(0);
+      setFen(STARTING_FEN);
+      setLastMove(null);
+      setCurrentAnalysis(null);
+    }
+  }, [loadedGame, chess]);
+
   const handleLoadGame = (value: string, type: "url" | "username") => {
     loadGameMutation.mutate({ value, type });
   };
@@ -184,6 +212,24 @@ export default function Trainer() {
             </div>
             
             <div className="flex items-center gap-4">
+              <Link href="/history">
+                <Button variant="outline" data-testid="button-view-history">
+                  <History className="w-4 h-4 mr-2" />
+                  History
+                </Button>
+              </Link>
+              <Link href="/puzzles">
+                <Button variant="outline" data-testid="button-view-puzzles">
+                  <Target className="w-4 h-4 mr-2" />
+                  Puzzles
+                </Button>
+              </Link>
+              <Link href="/settings">
+                <Button variant="outline" data-testid="button-view-settings">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </Button>
+              </Link>
               <GameLoader 
                 onGameLoad={handleLoadGame}
                 isLoading={loadGameMutation.isPending}

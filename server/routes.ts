@@ -8,6 +8,37 @@ import { getStockfishEvaluation } from "./lib/stockfish";
 import { randomUUID } from "crypto";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Get all games
+  app.get("/api/games", async (req, res) => {
+    try {
+      const games = await storage.getAllGames();
+      res.json(games);
+    } catch (error: any) {
+      console.error("Failed to fetch games:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch games" });
+    }
+  });
+
+  // Get a single game by ID
+  app.get("/api/games/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid game ID" });
+      }
+      
+      const game = await storage.getGame(id);
+      if (!game) {
+        return res.status(404).json({ error: "Game not found" });
+      }
+      
+      res.json(game);
+    } catch (error: any) {
+      console.error("Failed to fetch game:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch game" });
+    }
+  });
+
   // Import game from Lichess
   app.post("/api/games/import", async (req, res) => {
     try {

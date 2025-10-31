@@ -125,7 +125,9 @@ GM Trainer is a sophisticated web application that combines chess game analysis 
 - Frontend-backend integration complete
 - Real-time move analysis with audio playback
 - Persistent theme preferences
-- In-memory game and analysis caching
+- **Database persistence** with PostgreSQL and Drizzle ORM
+- **Game history dashboard** to view all analyzed games
+- Games persist across sessions and can be reloaded
 
 ## Usage Instructions
 
@@ -150,10 +152,44 @@ GM Trainer is a sophisticated web application that combines chess game analysis 
    - Click the theme toggle (sun/moon icon) in the top right
    - Preference is saved to localStorage
 
+## New Features (October 2025)
+
+### Database Persistence & Game History ✅
+- PostgreSQL database with Drizzle ORM
+- Games persist across sessions
+- Game history dashboard showing all analyzed games
+- Click any game card to reload it in the trainer
+- Database tables: games, move_analyses, users, training_sessions, progress_stats, puzzles, puzzle_attempts
+
+### Tactics Puzzle Training ✅
+- Dedicated Puzzles page with chess tactics
+- 5 sample puzzles covering themes: checkmate patterns, material gain, knight forks, removing defender, tactical exchanges
+- Difficulty ratings: 800-1400
+- Show/hide solution with detailed explanations
+- Navigate between puzzles
+- Puzzle database schema ready for expansion
+
+### Coaching Settings & Personalization ✅
+- Dedicated Settings page for user preferences
+- Coaching style selection: Aggressive, Positional, Tactical, Balanced, Defensive
+- Difficulty level slider (0-100%): Controls analysis depth and hint frequency
+- Verbosity slider (0-100%): Concise to detailed explanations
+- Multi-language support: English, Spanish, French, German, Russian
+- Settings persist in localStorage (database integration ready)
+
+### Position Evaluation with Stockfish ✅
+- Real-time engine evaluation for every position
+- Visual evaluation bar showing advantage
+- Centipawn scores (+1.5, -0.8) and mate scores (+M5, -M3)
+- Best move suggestions from engine
+- Fixed dark mode rendering for clear visualization
+
 ## Future Enhancements
-- User voice ID configuration for personalized coaching
-- Opening repertoire training mode
-- Tactical puzzle generation
-- Position evaluation engine
+- Opening repertoire training mode with spaced repetition
+- Endgame practice mode with theoretical positions
+- Full database integration for user settings
+- Puzzle attempt tracking and performance analytics
+- Interactive puzzle mode (drag-and-drop moves)
+- Lichess puzzle API integration
 - Game annotation export
 - Multi-game analysis and comparison
