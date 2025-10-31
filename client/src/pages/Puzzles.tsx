@@ -4,12 +4,28 @@ import { InteractiveChessBoard } from "@/components/InteractiveChessBoard";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Trophy, RotateCcw, Eye, Target, ArrowRight, CheckCircle2, XCircle, BarChart3, Download } from "lucide-react";
+import { Trophy, RotateCcw, Eye, Target, ArrowRight, CheckCircle2, XCircle, BarChart3, Download, Filter } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Puzzle } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+
+// Available themes for filtering
+const AVAILABLE_THEMES = [
+  "Back rank mate",
+  "Material gain",
+  "Knight attack",
+  "Central control",
+  "Double attack",
+  "Fork",
+  "Pin",
+  "Skewer",
+  "Discovered attack",
+];
 
 export default function Puzzles() {
   const { toast } = useToast();
@@ -19,10 +35,31 @@ export default function Puzzles() {
   const [currentFen, setCurrentFen] = useState("");
   const [attemptStatus, setAttemptStatus] = useState<"idle" | "correct" | "incorrect">("idle");
   const startTimeRef = useRef<number>(Date.now());
+  
+  // Filter state
+  const [showFilters, setShowFilters] = useState(false);
+  const [ratingRange, setRatingRange] = useState<[number, number]>([600, 1400]);
+  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
 
-  // Fetch puzzles from API
+  // Build query string for filters
+  const buildQueryString = () => {
+    const params = new URLSearchParams();
+    if (ratingRange[0] > 600) params.append('minRating', ratingRange[0].toString());
+    if (ratingRange[1] < 1400) params.append('maxRating', ratingRange[1].toString());
+    if (selectedThemes.length > 0) params.append('themes', selectedThemes.join(','));
+    const queryString = params.toString();
+    return queryString ? `?${queryString}` : '';
+  };
+
+  // Fetch puzzles from API with filters
   const { data: puzzles, isLoading } = useQuery<Puzzle[]>({
-    queryKey: ["/api/puzzles"],
+    queryKey: ["/api/puzzles", ratingRange, selectedThemes],
+    queryFn: async () => {
+      const queryString = buildQueryString();
+      const response = await fetch(`/api/puzzles${queryString}`);
+      if (!response.ok) throw new Error('Failed to fetch puzzles');
+      return response.json();
+    },
   });
 
   // Seed puzzles mutation
@@ -273,6 +310,14 @@ export default function Puzzles() {
             </div>
             
             <div className="flex items-center gap-4">
+              <Button
+                variant={showFilters ? "default" : "outline"}
+                onClick={() => setShowFilters(!showFilters)}
+                data-testid="button-toggle-filters"
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                Filters {selectedThemes.length > 0 && `(${selectedThemes.length})`}
+              </Button>
               <Link href="/stats">
                 <Button variant="outline" data-testid="button-view-stats">
                   <BarChart3 className="w-4 h-4 mr-2" />
@@ -289,6 +334,97 @@ export default function Puzzles() {
           </div>
         </div>
       </header>
+
+      {/* Filters Panel */}
+      {showFilters && (
+        <div className="border-b bg-muted/30">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Rating Range Filter */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Difficulty Range</Label>
+                  <span className="text-sm text-muted-foreground">
+                    {ratingRange[0]} - {ratingRange[1]}
+                  </span>
+                </div>
+                <Slider
+                  min={600}
+                  max={1400}
+                  step={50}
+                  value={ratingRange}
+                  onValueChange={(value) => setRatingRange(value as [number, number])}
+                  className="w-full"
+                  data-testid="slider-rating-range"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Beginner (600)</span>
+                  <span>Advanced (1400)</span>
+                </div>
+              </div>
+
+              {/* Theme Filter */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Themes</Label>
+                  {selectedThemes.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedThemes([])}
+                      data-testid="button-clear-themes"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {AVAILABLE_THEMES.map((theme) => (
+                    <div key={theme} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`theme-${theme}`}
+                        checked={selectedThemes.includes(theme)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedThemes([...selectedThemes, theme]);
+                          } else {
+                            setSelectedThemes(selectedThemes.filter(t => t !== theme));
+                          }
+                        }}
+                        data-testid={`checkbox-theme-${theme.toLowerCase().replace(/ /g, '-')}`}
+                      />
+                      <label
+                        htmlFor={`theme-${theme}`}
+                        className="text-sm cursor-pointer select-none"
+                      >
+                        {theme}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Results Count */}
+            <div className="mt-4 pt-4 border-t flex items-center justify-between">
+              <span className="text-sm text-muted-foreground" data-testid="text-filtered-count">
+                Showing {puzzles?.length || 0} puzzle{puzzles?.length !== 1 ? 's' : ''}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setRatingRange([600, 1400]);
+                  setSelectedThemes([]);
+                }}
+                data-testid="button-clear-all-filters"
+              >
+                Clear All Filters
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 p-6">

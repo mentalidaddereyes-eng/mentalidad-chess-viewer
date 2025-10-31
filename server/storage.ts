@@ -18,7 +18,7 @@ export interface IStorage {
   updateSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings>;
   
   // Puzzles
-  getAllPuzzles(): Promise<Puzzle[]>;
+  getAllPuzzles(filters?: { minRating?: number; maxRating?: number; themes?: string[] }): Promise<Puzzle[]>;
   getPuzzle(id: number): Promise<Puzzle | undefined>;
   createPuzzle(puzzle: InsertPuzzle): Promise<Puzzle>;
   
@@ -105,8 +105,30 @@ export class DbStorage implements IStorage {
     }
   }
 
-  async getAllPuzzles(): Promise<Puzzle[]> {
-    return await db.select().from(puzzles).orderBy(puzzles.rating);
+  async getAllPuzzles(filters?: { minRating?: number; maxRating?: number; themes?: string[] }): Promise<Puzzle[]> {
+    // Get all puzzles
+    const allPuzzles = await db.select().from(puzzles).orderBy(puzzles.rating);
+    
+    // If no filters, return all
+    if (!filters) {
+      return allPuzzles;
+    }
+    
+    // Filter in-memory
+    return allPuzzles.filter(puzzle => {
+      // Check rating range
+      const ratingMatch = 
+        (filters.minRating === undefined || (puzzle.rating !== null && puzzle.rating >= filters.minRating)) &&
+        (filters.maxRating === undefined || (puzzle.rating !== null && puzzle.rating <= filters.maxRating));
+      
+      // Check theme match
+      const themeMatch = 
+        !filters.themes || 
+        filters.themes.length === 0 || 
+        (puzzle.theme && filters.themes.includes(puzzle.theme));
+      
+      return ratingMatch && themeMatch;
+    });
   }
 
   async getPuzzle(id: number): Promise<Puzzle | undefined> {

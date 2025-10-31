@@ -223,10 +223,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all puzzles
+  // Get all puzzles (with optional filters)
   app.get("/api/puzzles", async (req, res) => {
     try {
-      const puzzles = await storage.getAllPuzzles();
+      // Parse and validate query parameters
+      let minRating: number | undefined;
+      let maxRating: number | undefined;
+      let themes: string[] | undefined;
+      
+      // Parse minRating with strict validation (handle both string and array)
+      if (req.query.minRating) {
+        const param = req.query.minRating;
+        // Reject repeated params for numeric values
+        if (Array.isArray(param)) {
+          return res.status(400).json({ error: "minRating cannot be specified multiple times" });
+        }
+        const str = String(param);
+        const num = Number(str);
+        if (!Number.isFinite(num) || !Number.isInteger(num) || str.trim() !== num.toString()) {
+          return res.status(400).json({ error: "Invalid minRating: must be a valid integer" });
+        }
+        minRating = num;
+      }
+      
+      // Parse maxRating with strict validation (handle both string and array)
+      if (req.query.maxRating) {
+        const param = req.query.maxRating;
+        // Reject repeated params for numeric values
+        if (Array.isArray(param)) {
+          return res.status(400).json({ error: "maxRating cannot be specified multiple times" });
+        }
+        const str = String(param);
+        const num = Number(str);
+        if (!Number.isFinite(num) || !Number.isInteger(num) || str.trim() !== num.toString()) {
+          return res.status(400).json({ error: "Invalid maxRating: must be a valid integer" });
+        }
+        maxRating = num;
+      }
+      
+      // Validate that minRating <= maxRating
+      if (minRating !== undefined && maxRating !== undefined && minRating > maxRating) {
+        return res.status(400).json({ error: "minRating must be less than or equal to maxRating" });
+      }
+      
+      // Parse and trim themes (handle both string and array formats)
+      if (req.query.themes) {
+        const themesParam = req.query.themes;
+        if (Array.isArray(themesParam)) {
+          // Handle repeated query params like ?themes=Fork&themes=Pin
+          themes = themesParam
+            .flatMap(t => String(t).split(','))
+            .map(t => t.trim())
+            .filter(Boolean);
+        } else if (typeof themesParam === 'string') {
+          // Handle comma-separated string like ?themes=Fork,Pin
+          themes = themesParam
+            .split(',')
+            .map(t => t.trim())
+            .filter(Boolean);
+        } else {
+          return res.status(400).json({ error: "Invalid themes parameter format" });
+        }
+      }
+      
+      // Build filters object only with valid values
+      const filters = (minRating !== undefined || maxRating !== undefined || themes !== undefined) 
+        ? { minRating, maxRating, themes }
+        : undefined;
+      
+      const puzzles = await storage.getAllPuzzles(filters);
       res.json(puzzles);
     } catch (error: any) {
       console.error("Failed to fetch puzzles:", error);
