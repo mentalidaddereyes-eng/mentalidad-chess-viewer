@@ -1,0 +1,70 @@
+Aplica el **Cost Saver Pack v6.0 (Pro/Free + cache + low-cycles)** sin pedir confirmaciones.
+
+OBJETIVO
+- Mantener calidad PRO, bajar costos de GPT/voz y consumo de Cycles.
+- Voz automática según plan (Pro=ElevenLabs, Free=gTTS/Piper), con cache y fallback.
+- Limitar llamadas a GPT con memo por FEN y plantillas locales.
+
+REGLAS DE COSTO (obligatorias)
+- GPT: máx 2 llamadas/min (burst 1 cada 3s). Si se excede → plantilla local.
+- Memo GPT: no llamar si hash(FEN|lang|mode|bestSan) existe (TTL 180–300s).
+- Comentarios ≤200 caracteres, sin evaluaciones numéricas.
+- TTS: cache LRU ≤200MB (clave=lang|mode|voice|sha256(text)). HEAD→reuse→POST sólo si falta.
+- Fallback TTS: si ElevenLabs falla o tarda >2s → gTTS/Piper (mismo idioma), y cachear.
+- Lazy-load de módulos pesados (puzzles, pgn-browser, proveedores TTS); nada 24/7.
+
+1) DETECCIÓN DE PLAN (Pro/Free) + BANNER
+- Al cargar: leer `plan` de query (?plan=pro|free). Si no, usar cookie `planMode`; si no existe → `free`.
+- Guardar en cookie `planMode` (TTL 7d) + localStorage.
+- VOICE_PROVIDER:
+  - pro → ELEVENLABS (IDs existentes por idioma/modo).
+  - free → GTTS o PIPER (elige el que esté disponible en el proyecto).
+- Banner fijo arriba:
+  - Pro: “💎 Modo Pro – voz clonada del GM Leo”.
+  - Free: “🎮 Modo Gratis – voz genérica (ahorro activado)”.
+- Botón “Cambiar” abre modal simple para alternar Pro/Free (sólo actualiza cookie y recarga voces).
+- data-testid: plan-banner, plan-switch-pro, plan-switch-free.
+
+2) GPT INTELIGENTE Y BARATO
+- getGPTComment({fen,bestSan,scoreCp,motifs,phase,lang,mode}):
+  - Primero memo por hash(FEN|lang|mode|bestSan). Si existe → devolver memo.
+  - isTrivialPosition(): si captura forzada, repetición, mate en 1–2, táctica evidente, libro de apertura → plantilla local (sin GPT).
+  - Si no trivial → 1 llamada a GPT (perfil “Doctor en Entrenamiento Ajedrecístico”), respuesta ≤200 chars, sin números.
+  - Guardar memo (TTL 180–300s).
+- Debounce GPT 350–500ms.
+- No re-analizar si FEN no cambió.
+
+3) VOZ ASÍNCRONA + CACHE + FALLBACK
+- speak(text, {lang,mode}):
+  - Elegir proveedor por planMode (Pro=11L, Free=gTTS/Piper).
+  - Generar clave cache `lang|mode|voice|sha256(text)`. Si hit → reproducir instantáneo.
+  - Si miss → generar audio async (no bloquear UI), guardar y reproducir.
+  - Al cambiar `language` o `mode` o `planMode` → stop(), limpiar cola y reintentar con nueva voz.
+  - Eliminar defaults en-US; respetar 100% `settings.language`.
+- Debounce TTS 500–700ms.
+- data-testid: tts-provider, tts-cache-hit.
+
+4) INTEGRACIÓN CON LO YA HECHO (v5.1.1 + v5.3)
+- Mantener botón **Importar** unificado (texto/archivo) con auto-detección PGN/FEN.
+- PGN Browser en la derecha: White–Black · Result · ECO · Date (lista scrolleable).
+- No disparar GPT al cambiar sólo de partida; disparar al cambiar FEN final/actual.
+- Puzzles: mantener auto-next (400ms), persistir dificultad sin parpadeos.
+
+5) SEGURIDAD LIGERA (sin migración)
+- No exponer API keys en cliente; usar variables de entorno en backend.
+- CORS: permitir sólo tu dominio principal + subdominio.
+- CSP básica: default-src 'self'; connect-src 'self' *.elevenlabs.io TU_BACKEND; ajustar img/font según uso.
+- Rate-limit por IP en /api/* (60/min). Logs sin PII.
+
+6) E2E (rápido)
+- /?plan=pro → banner Pro y VOZ=ElevenLabs; /?plan=free → banner Free y VOZ=gTTS/Piper.
+- Misma FEN repetida → memo HIT (sin GPT). Misma frase → TTS cache HIT (sin nueva llamada).
+- Cambio idioma ES/PT/HI/EN → voz y texto cambian; jamás inglés si lang≠EN.
+- Play vs Coach: negras → engine mueve primero; blancas → mueve usuario.
+- Import: archivo .pgn múltiple → lista visible y carga a última jugada; FEN pegado → carga posición (sin agregar a lista).
+
+MENSAJE Y COMMIT
+- Imprime EXACTO:
+✅ Cost Saver Pack v6.0 aplicado: plan Pro/Free con voz auto (11L/gTTS/Piper), memo por FEN, rate-limit GPT, cache TTS con fallback, lazy-load, banner visible, bajo Cycles.
+- Commit único:
+feat: v6.0 cost-saver (plan auto Pro/Free, GPT memo+rate-limit, TTS cache+fallback, lazy-load, banner)

@@ -3,11 +3,12 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { fetchGameByUrl, fetchGamesByUsername, parsePgnMetadata } from "./lib/lichess";
 import { analyzeMove, answerQuestion } from "./lib/openai";
-import { textToSpeech } from "./lib/elevenlabs";
+import { generateSpeech, getTTSProvider } from "./lib/tts-provider"; // Cost Saver Pack v6.0
 import { getStockfishEvaluation } from "./lib/stockfish";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { insertPuzzleSchema, insertPuzzleAttemptSchema } from "@shared/schema";
+import type { PlanMode, VoiceProvider } from "@shared/types"; // Cost Saver Pack v6.0
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all games
@@ -117,11 +118,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let audioUrl;
       if (!muted) {
         try {
-          const audioBuffer = await textToSpeech(
-            comment.text, 
-            voiceMode || 'pro',
-            settings?.language || 'spanish' // Default Spanish per hotfix v5.1.1
-          );
+          // Cost Saver Pack v6.0: Use plan-aware TTS provider
+          const planMode: PlanMode = (req.query.plan as PlanMode) || 'free';
+          const provider = getTTSProvider(planMode);
+          
+          const audioBuffer = await generateSpeech(comment.text, {
+            provider,
+            language: (settings?.language as any) || 'spanish',
+            voiceMode: voiceMode || 'pro',
+          });
           
           // In a production app, you'd save this to object storage
           // For now, we'll convert to base64 data URL
@@ -215,11 +220,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let audioUrl;
       if (!muted) {
         try {
-          const audioBuffer = await textToSpeech(
-            comment.text, 
-            voiceMode || 'pro',
-            settings?.language || 'spanish' // Default Spanish per hotfix v5.1.1
-          );
+          // Cost Saver Pack v6.0: Use plan-aware TTS provider
+          const planMode: PlanMode = (req.query.plan as PlanMode) || 'free';
+          const provider = getTTSProvider(planMode);
+          
+          const audioBuffer = await generateSpeech(comment.text, {
+            provider,
+            language: (settings?.language as any) || 'spanish',
+            voiceMode: voiceMode || 'pro',
+          });
           const base64Audio = audioBuffer.toString('base64');
           audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
         } catch (audioError) {

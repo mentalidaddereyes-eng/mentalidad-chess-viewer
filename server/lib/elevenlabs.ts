@@ -57,8 +57,8 @@ export async function textToSpeech(
   voiceMode: VoiceMode = 'pro',
   language: Language = 'spanish' // Default to Spanish per hotfix v5.1.1
 ): Promise<Buffer> {
-  // Check cache first (low-cost optimization)
-  const cacheKey = getTTSCacheKey(text, voiceMode, language);
+  // Check cache first (low-cost optimization) - Cost Saver Pack v6.0: includes provider
+  const cacheKey = getTTSCacheKey(text, voiceMode, language, 'elevenlabs');
   const cached = ttsCache.get(cacheKey);
   if (cached && Buffer.isBuffer(cached)) {
     console.log(`[voice] cache hit (${language}/${voiceMode}), skipping ElevenLabs call`);

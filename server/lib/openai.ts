@@ -1,8 +1,9 @@
-// OpenAI integration for chess move analysis - Fix Pack v5.1
-// Features: GPT cache, local templates, debounce (400ms), low-cost optimization
+// OpenAI integration for chess move analysis - Cost Saver Pack v6.0
+// Features: GPT memo+rate-limit, local templates, trivial detection, max 2 calls/min
 
 import OpenAI from "openai";
-import { gptCache, getGPTCacheKey, getLocalTemplate } from "./cache";
+import { getLocalTemplate } from "./cache";
+import { gptMemo, isTrivialPosition } from "./gpt-memo";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -42,9 +43,9 @@ function getLanguageInstruction(language: string): string {
 }
 
 /**
- * Generate pedagogical chess commentary - Fix Pack v5.1
+ * Generate pedagogical chess commentary - Cost Saver Pack v6.0
  * Profile: Doctor en Ciencias del Deporte y Entrenamiento Ajedrecístico
- * Features: No numeric evaluations, GPT cache, local templates, debounce (400ms)
+ * Features: GPT memo (hash-based), rate-limit (2/min), trivial detection, max 200 chars
  */
 export async function getGPTComment(params: {
   fen: string;
@@ -62,24 +63,42 @@ export async function getGPTComment(params: {
     score,
     mate,
     moveHistory = [],
-    language = 'spanish', // Fix Pack v5.1: Default to ES
+    language = 'spanish',
     voiceMode = 'pro',
     coachingStyle = 'balanced'
   } = params;
 
-  // Fix Pack v5.1: Check local templates first (no GPT call for trivial positions)
+  const bestSan = bestMove || '';
+
+  // 1. Check local templates first (Cost Saver Pack v6.0)
   const localTemplate = getLocalTemplate(fen, language, voiceMode);
   if (localTemplate) {
-    console.log('[coach] local template used (no GPT call)');
+    console.log('[gpt] local template used (no GPT call)');
     return { text: localTemplate };
   }
 
-  // Fix Pack v5.1: Check GPT cache (avoid duplicate calls for same FEN)
-  const cacheKey = getGPTCacheKey(fen, language, voiceMode, coachingStyle);
-  const cached = gptCache.get(cacheKey);
-  if (cached && typeof cached === 'string') {
-    console.log('[coach] GPT cache hit');
-    return { text: cached };
+  // 2. Check trivial positions (Cost Saver Pack v6.0: no GPT needed)
+  if (isTrivialPosition(fen, bestSan, score, mate)) {
+    const trivialFallback = voiceMode === 'kids' 
+      ? 'This position is clear! Follow the best move.'
+      : 'The position evaluation is straightforward. Execute the indicated continuation.';
+    console.log('[gpt] trivial position detected, using fallback');
+    return { text: trivialFallback };
+  }
+
+  // 3. Check GPT memo (Cost Saver Pack v6.0: hash-based with TTL 180-300s)
+  const memoHit = gptMemo.get(fen, language, voiceMode, bestSan);
+  if (memoHit) {
+    return { text: memoHit };
+  }
+
+  // 4. Check rate limit (Cost Saver Pack v6.0: max 2/min, burst 1/3s)
+  if (!gptMemo.canMakeGPTCall()) {
+    const rateLimitFallback = voiceMode === 'kids'
+      ? 'Great moves! Keep thinking carefully about each position.'
+      : 'Continue analyzing the position thoughtfully. Consider your strategic objectives.';
+    console.log('[gpt] rate limit exceeded, using fallback');
+    return { text: rateLimitFallback };
   }
 
   const languageInstruction = getLanguageInstruction(language);
@@ -138,6 +157,9 @@ Example BAD responses (NEVER DO THIS):
 "White is +0.43 better. The evaluation is +0.89 after Nf3." ❌
 "Black is down -1.2 material" ❌`;
 
+  // 5. Make GPT call (Cost Saver Pack v6.0: record for rate limiting)
+  gptMemo.recordGPTCall();
+  
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-5",
@@ -151,19 +173,22 @@ Example BAD responses (NEVER DO THIS):
           content: prompt,
         },
       ],
-      max_completion_tokens: 250,
+      max_completion_tokens: 200, // Cost Saver Pack v6.0: reduced from 250 to 200
     });
 
-    const text = response.choices[0].message.content || "Let's analyze this interesting position together.";
+    let text = response.choices[0].message.content || "Let's analyze this interesting position together.";
     
     // Safety filter: Remove any numeric evaluations that slipped through
-    const cleanedText = text
+    text = text
       .replace(/[+\-±]?\d+\.?\d*\s*(pawns?|centipawns?|cp|evaluation|eval)/gi, 'advantage')
       .replace(/[+\-±]\d+\.?\d*/g, '')
       .trim();
+    
+    // Cost Saver Pack v6.0: Truncate to max 200 chars
+    const cleanedText = text.length > 200 ? text.substring(0, 197) + '...' : text;
 
-    // Fix Pack v5.1: Store in cache for future reuse
-    gptCache.set(cacheKey, cleanedText);
+    // Cost Saver Pack v6.0: Store in memo (hash-based with TTL)
+    gptMemo.set(fen, language, voiceMode, bestSan, cleanedText);
 
     return { text: cleanedText };
   } catch (error) {
