@@ -38,6 +38,8 @@ The application features a clean, modern design with a dark mode theme using Tai
 - **Multi-Game PGN**: Automatic detection of multiple games in PGN, dropdown selector (only visible when 2+ games), metadata parsing with CRLF normalization.
 - **Lichess Integration**: Game import by URL or username (max 10 games), daily puzzle import from Lichess API with smart data mapping.
 - **AI Move Analysis**: Real-time commentary and evaluation badges.
+- **Analysis Mode**: Free analysis mode in Trainer page allowing users to explore alternative moves from any position. Features seamless toggle between view-only mode and interactive mode, with proper state restoration when switching. Users can make moves on the board and receive AI analysis for each exploratory move. State management ensures the canonical game position is always restored when exiting analysis mode.
+- **Custom Position Analysis**: FEN input field allowing users to load and analyze any chess position. Includes validation, error handling, and automatic AI analysis for custom positions. Users can paste FEN strings and receive immediate GM-level commentary on the position.
 - **Voice Coaching**: Text-to-speech responses with selectable voice personalities, persistent mute state, and quick controls.
 - **Voice Questions**: Browser-based speech recognition for user queries.
 - **Auto-play Mode**: Automated game progression with AI analysis.

@@ -109,6 +109,7 @@ export default function Trainer() {
   const [isAnalysisMode, setIsAnalysisMode] = useState(false);
   const [customFenInput, setCustomFenInput] = useState("");
   const [analysisModeChess] = useState(new Chess());
+  const [exploratoryMoves, setExploratoryMoves] = useState<string[]>([]); // Track moves made in analysis mode
 
   // Load game from history if gameId is in URL
   const { data: loadedGame } = useQuery<Game>({
@@ -343,6 +344,7 @@ export default function Trainer() {
       try {
         // Reset analysisModeChess to start fresh from current position
         analysisModeChess.reset();
+        setExploratoryMoves([]); // Clear exploratory moves
         
         // Replay moves up to current position
         if (currentMove > 0 && moveHistory.length > 0) {
@@ -388,6 +390,7 @@ export default function Trainer() {
         setLastMove(lastMoveInfo);
         setIsAnalysisMode(false);
         setCurrentAnalysis(null); // Clear analysis from exploratory moves
+        setExploratoryMoves([]); // Clear exploratory moves
         
         // Reset analysisModeChess for next time
         analysisModeChess.reset();
@@ -422,11 +425,13 @@ export default function Trainer() {
       testChess.load(customFenInput.trim());
       
       // Valid FEN - load it
+      analysisModeChess.reset();
       analysisModeChess.load(customFenInput.trim());
       setFen(customFenInput.trim());
       setLastMove(null);
       setIsAnalysisMode(true);
       setCurrentAnalysis(null);
+      setExploratoryMoves([]); // Clear exploratory moves for new position
       
       // Request AI analysis for this position
       analyzeMoveMutation.mutate({
@@ -461,6 +466,9 @@ export default function Trainer() {
         const newFen = analysisModeChess.fen();
         setFen(newFen);
         setLastMove({ from: move.from, to: move.to });
+        
+        // Add move to exploratory history
+        setExploratoryMoves(prev => [...prev, result.san]);
         
         // Request AI analysis for this move
         analyzeMoveMutation.mutate({
@@ -568,8 +576,8 @@ export default function Trainer() {
               
               <div className="flex justify-center">
                 <MoveControls
-                  currentMove={currentMove}
-                  totalMoves={moveHistory.length}
+                  currentMove={isAnalysisMode ? exploratoryMoves.length : currentMove}
+                  totalMoves={isAnalysisMode ? exploratoryMoves.length : moveHistory.length}
                   isAutoPlaying={isAutoPlaying}
                   onFirst={() => goToMove(0)}
                   onPrevious={() => goToMove(currentMove - 1)}
@@ -677,8 +685,8 @@ export default function Trainer() {
               <div className="flex-1 min-h-0">
                 <AnalysisPanel
                   analysis={currentAnalysis}
-                  moveHistory={moveHistory}
-                  currentMove={currentMove}
+                  moveHistory={isAnalysisMode ? exploratoryMoves : moveHistory}
+                  currentMove={isAnalysisMode ? exploratoryMoves.length : currentMove}
                   isSpeaking={isSpeaking}
                 />
               </div>
