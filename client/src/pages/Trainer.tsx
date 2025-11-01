@@ -56,7 +56,7 @@ function parsePgnMeta(pgn: string): { white: string; black: string; event?: stri
   };
 }
 
-// Helper to get user settings from localStorage
+// Helper to get user settings from localStorage - Fix Pack v5.1: Default to ES
 function getUserSettings() {
   try {
     const savedSettings = localStorage.getItem("gm_trainer_settings");
@@ -70,7 +70,7 @@ function getUserSettings() {
     coachingStyle: "balanced",
     difficulty: 50,
     verbosity: 50,
-    language: "english"
+    language: "spanish" // Fix Pack v5.1: Default to Spanish
   };
 }
 

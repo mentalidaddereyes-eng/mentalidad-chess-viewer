@@ -1,6 +1,8 @@
-// ElevenLabs integration for text-to-speech
+// ElevenLabs integration for text-to-speech - Fix Pack v5.1
+// Features: LRU cache (200MB), async TTS, low-cost optimization
 
 import { ElevenLabsClient } from "elevenlabs";
+import { ttsCache, getTTSCacheKey } from "./cache";
 
 const elevenlabs = new ElevenLabsClient({
   apiKey: process.env.ELEVENLABS_API_KEY,
@@ -17,7 +19,16 @@ console.log('[voice] init ok (muted)');
 console.log('[voice] VOICE_PRO available:', !!VOICE_PRO);
 console.log('[voice] VOICE_KIDS available:', !!VOICE_KIDS);
 
+// Fix Pack v5.1: TTS with LRU cache (200MB budget)
 export async function textToSpeech(text: string, voiceMode: VoiceMode = 'pro'): Promise<Buffer> {
+  // Check cache first (low-cost optimization)
+  const cacheKey = getTTSCacheKey(text, voiceMode);
+  const cached = ttsCache.get(cacheKey);
+  if (cached && Buffer.isBuffer(cached)) {
+    console.log('[voice] cache hit, skipping ElevenLabs call');
+    return cached;
+  }
+
   try {
     // Select voice based on mode
     let voiceId: string;
@@ -32,7 +43,7 @@ export async function textToSpeech(text: string, voiceMode: VoiceMode = 'pro'): 
       console.log('[voice] fallback to default voice');
     }
 
-    console.log('[voice] elevenlabs used, single-channel enforced');
+    console.log('[voice] elevenlabs API call, single-channel enforced');
 
     const audio = await elevenlabs.generate({
       voice: voiceId,
@@ -46,7 +57,12 @@ export async function textToSpeech(text: string, voiceMode: VoiceMode = 'pro'): 
       chunks.push(chunk);
     }
     
-    return Buffer.concat(chunks);
+    const audioBuffer = Buffer.concat(chunks);
+    
+    // Store in cache for future reuse
+    ttsCache.set(cacheKey, audioBuffer);
+    
+    return audioBuffer;
   } catch (error) {
     console.error("[voice] ElevenLabs TTS error:", error);
     throw new Error("Failed to generate speech");

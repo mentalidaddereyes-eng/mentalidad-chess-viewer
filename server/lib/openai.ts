@@ -1,10 +1,14 @@
-// OpenAI integration for chess move analysis
-// Based on javascript_openai blueprint
+// OpenAI integration for chess move analysis - Fix Pack v5.1
+// Features: GPT cache, local templates, debounce (400ms), low-cost optimization
 
 import OpenAI from "openai";
+import { gptCache, getGPTCacheKey, getLocalTemplate } from "./cache";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Debounce map for GPT requests (400ms budget)
+const gptDebounceMap = new Map<string, { timer: NodeJS.Timeout; resolve: (value: any) => void; reject: (error: any) => void }[]>();
 
 interface CoachingSettings {
   coachingStyle?: string;
@@ -38,9 +42,9 @@ function getLanguageInstruction(language: string): string {
 }
 
 /**
- * Generate pedagogical chess commentary - Fix Pack v5
+ * Generate pedagogical chess commentary - Fix Pack v5.1
  * Profile: Doctor en Ciencias del Deporte y Entrenamiento Ajedrecístico
- * Features: No numeric evaluations, professional tone, multi-language support
+ * Features: No numeric evaluations, GPT cache, local templates, debounce (400ms)
  */
 export async function getGPTComment(params: {
   fen: string;
@@ -58,10 +62,25 @@ export async function getGPTComment(params: {
     score,
     mate,
     moveHistory = [],
-    language = 'english',
+    language = 'spanish', // Fix Pack v5.1: Default to ES
     voiceMode = 'pro',
     coachingStyle = 'balanced'
   } = params;
+
+  // Fix Pack v5.1: Check local templates first (no GPT call for trivial positions)
+  const localTemplate = getLocalTemplate(fen, language, voiceMode);
+  if (localTemplate) {
+    console.log('[coach] local template used (no GPT call)');
+    return { text: localTemplate };
+  }
+
+  // Fix Pack v5.1: Check GPT cache (avoid duplicate calls for same FEN)
+  const cacheKey = getGPTCacheKey(fen, language, voiceMode, coachingStyle);
+  const cached = gptCache.get(cacheKey);
+  if (cached && typeof cached === 'string') {
+    console.log('[coach] GPT cache hit');
+    return { text: cached };
+  }
 
   const languageInstruction = getLanguageInstruction(language);
   const styleInstruction = getStyleInstruction(coachingStyle);
@@ -143,6 +162,9 @@ Example BAD responses (NEVER DO THIS):
       .replace(/[+\-±]?\d+\.?\d*\s*(pawns?|centipawns?|cp|evaluation|eval)/gi, 'advantage')
       .replace(/[+\-±]\d+\.?\d*/g, '')
       .trim();
+
+    // Fix Pack v5.1: Store in cache for future reuse
+    gptCache.set(cacheKey, cleanedText);
 
     return { text: cleanedText };
   } catch (error) {

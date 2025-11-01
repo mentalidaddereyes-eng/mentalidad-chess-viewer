@@ -23,10 +23,11 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 export default function Settings() {
   const { toast } = useToast();
   const { voiceMode, muted, selectVoice, toggleMute } = useVoice();
+  // Fix Pack v5.1: Default to Spanish
   const [coachingStyle, setCoachingStyle] = useState("balanced");
   const [difficulty, setDifficulty] = useState(50);
   const [verbosity, setVerbosity] = useState(50);
-  const [language, setLanguage] = useState("english");
+  const [language, setLanguage] = useState("spanish");
 
   // Load settings from API
   const { data: settingsData, isLoading } = useQuery<UserSettings>({
@@ -39,7 +40,7 @@ export default function Settings() {
       setCoachingStyle(settingsData.coachingStyle || "balanced");
       setDifficulty(settingsData.difficulty ?? 50);
       setVerbosity(settingsData.verbosity ?? 50);
-      setLanguage(settingsData.language || "english");
+      setLanguage(settingsData.language || "spanish"); // Fix Pack v5.1
     }
   }, [settingsData]);
 
