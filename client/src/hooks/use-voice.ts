@@ -55,7 +55,7 @@ export function useVoice() {
     }
   }, []);
 
-  // Speak function - only plays if not muted, with 1200ms debounce
+  // Speak function - only plays if not muted, with 600ms debounce (Fix Pack v5)
   const speak = useCallback((audioUrl: string | undefined) => {
     console.log('[voice] speak called, muted:', muted, 'audioUrl:', !!audioUrl);
     
@@ -75,7 +75,7 @@ export function useVoice() {
       console.log('[voice] debounce cleared (preventing rapid-fire)');
     }
 
-    // Debounce: wait 1200ms before playing (prevents overlapping from rapid events)
+    // Debounce: wait 600ms before playing (Fix Pack v5: reduced from 1200ms)
     debounceTimerRef.current = setTimeout(() => {
       // Stop any currently playing audio (single-channel enforcement)
       stopAudio();
@@ -107,7 +107,7 @@ export function useVoice() {
       }
       
       debounceTimerRef.current = null;
-    }, 1200);
+    }, 600); // Fix Pack v5: reduced latency from 1200ms to 600ms
   }, [muted, voiceMode, stopAudio]);
 
   // Change voice mode (stop current audio if playing)

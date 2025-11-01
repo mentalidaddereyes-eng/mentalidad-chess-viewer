@@ -1,0 +1,65 @@
+Voy a aplicar el Fix Pack v5 completo del proyecto “Entrenador GM IA – Mentalidad de Reyes”.
+Objetivo: Activar el módulo GPT del entrenador, corregir bugs visuales, mejorar latencia de voz y optimizar el flujo de análisis.
+
+1. Activar Inteligencia del Entrenador (Stockfish + GPT + ElevenLabs)
+- Crear función getGPTComment() para generar explicaciones naturales y pedagógicas:
+  • Basada en el perfil del entrenador: “Doctor en Ciencias del Deporte y Entrenamiento Ajedrecístico”.
+  • Usa conocimiento de Lichess y Chess.com para reforzar explicaciones.
+  • No debe incluir valores numéricos de evaluación (+0.3, -0.4, etc).
+  • Usa tono profesional y motivador: analiza, explica, enseña.
+  • Idiomas soportados: Español, Inglés, Portugués, Hindi.
+  • Ajusta vocabulario según modo:
+      - Pro (Leo): estilo Gran Maestro.
+      - Niño (Augusto): frases simples y tono amable.
+- Llamar a getGPTComment() tras cada jugada o carga de partida:
+  const analysis = await analyzeWithStockfish(fen);
+  const comment = await getGPTComment({ fen, bestMove: analysis.bestMove, score: analysis.score, lang: currentLang, mode: currentMode });
+  speak(comment.text, { lang: currentLang, mode: currentMode });
+
+2. Voz y Latencia
+- Ajustar speak() para usar idioma seleccionado (settings.language).
+- Reducir debounce de voz a 500–700 ms.
+- Implementar cache local de voz (IndexedDB o localStorage):
+  • Guardar los últimos 10 audios por idioma y modo.
+  • Reutilizar frases comunes (“Buen movimiento”, “Idea interesante”, etc.).
+- Eliminar frases genéricas fijas (“Analyzing this position…”, “The move appears to be playable.”) y reemplazarlas por respuestas humanas del coach.
+
+3. Interfaz y Funcionalidad
+- Reemplazar columna derecha vacía por un mini navegador de partidas (PGN Browser):
+  • Lista scrollable con partidas cargadas.
+  • Mostrar jugadores, resultado, fecha y ECO.
+  • Click carga la partida y salta a la última jugada.
+- Validación PGN:
+  • Permitir encabezados incompletos y múltiples partidas.
+  • Si no hay errores, mostrar lista de partidas cargadas.
+- Auto-flip del tablero:
+  • Al jugar con negras, tablero se voltea automáticamente.
+  • El motor juega el primer movimiento de blancas.
+- Modo multilenguaje:
+  • Cambiar idioma de UI y voz sin refrescar página.
+  • Evitar mezclas (si está en español, coach habla español).
+
+4. Puzzles y Entrenamiento
+- Cargar puzzles automáticamente si la base está vacía.
+- Al completar o fallar un puzzle, cargar el siguiente automáticamente.
+- Simplificar selector de dificultad (sin parpadeos).
+- Mantener opción de repetir o saltar puzzle.
+- Optimizar transición de dificultad para móviles.
+
+5. Optimización y Rendimiento
+- Mantener un solo canal de voz activo.
+- Reducir uso de CPU durante análisis continuo.
+- Actualizar service worker a v2025-11-01-fixpack-v5.
+- Confirmar compatibilidad móvil total.
+
+6. E2E Testing
+- Verificar:
+  • Carga PGN múltiple → listado visible y navegable.
+  • Jugar con negras → motor mueve primero.
+  • Cambio de idioma → voz y texto cambian al instante.
+  • Coach → explicaciones humanas, sin números.
+  • Puzzles → auto-siguiente y seed automático.
+- Confirmar log final: “✅ Fix Pack v5 aplicado con éxito: Entrenador IA operativo y multilingüe.”
+
+7. Commit final
+feat: Activate GPT coach + voice optimization + UI fixes (Fix Pack v5)

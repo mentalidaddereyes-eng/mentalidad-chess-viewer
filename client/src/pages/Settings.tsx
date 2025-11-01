@@ -202,6 +202,8 @@ export default function Settings() {
                 <SelectContent>
                   <SelectItem value="english">English</SelectItem>
                   <SelectItem value="spanish">Spanish (Español)</SelectItem>
+                  <SelectItem value="portuguese">Portuguese (Português)</SelectItem>
+                  <SelectItem value="hindi">Hindi (हिन्दी)</SelectItem>
                   <SelectItem value="french">French (Français)</SelectItem>
                   <SelectItem value="german">German (Deutsch)</SelectItem>
                   <SelectItem value="russian">Russian (Русский)</SelectItem>

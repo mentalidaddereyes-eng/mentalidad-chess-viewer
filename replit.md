@@ -5,6 +5,34 @@ GM Trainer is a sophisticated web application for chess enthusiasts, combining g
 
 ## Recent Changes
 
+### November 1, 2025 - Fix Pack v5 (GPT Coach Intelligence & Voice Optimization)
+- **AI Coach Intelligence Activated**:
+  - Created `getGPTComment()` function with "Doctor en Ciencias del Deporte y Entrenamiento Ajedrecístico" profile
+  - Pedagogical, motivational coaching commentary WITHOUT numeric evaluations (+0.3, -0.4, etc.)
+  - Focuses on IDEAS, PLANS, and CONCEPTS instead of raw numbers
+  - Professional tone for Pro mode (Leo voice), simple friendly language for Kids mode (Augusto voice)
+  - Integrated with Stockfish + GPT-5 + ElevenLabs for complete coaching experience
+- **Enhanced Multi-Language Support**:
+  - Added Portuguese (Português) and Hindi (हिन्दी) to existing languages
+  - Full support: English, Spanish, Portuguese, Hindi, French, German, Russian
+  - Language selection affects both UI and voice coach simultaneously
+  - Settings persist across sessions
+- **Voice System Optimization**:
+  - Reduced debounce from 1200ms to 600ms for faster response
+  - Maintained single-channel audio enforcement (no overlapping)
+  - Eliminated generic phrases like "Analyzing this position..." and "The move appears to be playable."
+  - All responses now human-like and contextual
+- **API Improvements**:
+  - New `/api/coach/comment` endpoint for pedagogical commentary
+  - Updated `/api/analysis/move` to use `getGPTComment()` instead of generic `analyzeMove()`
+  - Settings validation now includes Portuguese and Hindi
+- **Service Worker**: Updated to version '2025-11-01-fixpack-v5'
+- **Technical Achievements**:
+  - Temperature 0.8 for more creative, human-like responses
+  - Safety filter removes any numeric evaluations that slip through
+  - Fallback responses adapted to voice mode (Pro vs Kids)
+  - 250 max tokens for detailed yet concise commentary
+
 ### November 1, 2025 - Fix Pack v4.1 (Bug Fixes & UX Improvements)
 - **PGN Loading Fixes**:
   - Board now displays final position after loading (not starting position)

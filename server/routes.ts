@@ -76,7 +76,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Analyze a specific move
+  // Analyze a specific move (Fix Pack v5: now uses getGPTComment for pedagogical analysis)
   app.post("/api/analysis/move", async (req, res) => {
     try {
       const { moveNumber, move, fen, settings, voiceMode, muted } = req.body;
@@ -85,10 +85,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
-      // Get AI analysis first (required)
-      const analysis = await analyzeMove(moveNumber, move, fen, [], settings);
-      
-      // Try to get engine evaluation (optional, with timeout)
+      // Try to get engine evaluation first (used for context in GPT commentary)
       let engineEval: { score?: number; mate?: number; bestMove?: string } | undefined;
       try {
         engineEval = await Promise.race([
@@ -97,24 +94,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
             setTimeout(() => reject(new Error("Stockfish timeout")), 12000)
           )
         ]);
-        console.log("Stockfish evaluation:", engineEval);
+        console.log("[coach] Stockfish eval:", engineEval);
       } catch (engineError) {
-        console.log("Stockfish evaluation skipped:", engineError);
+        console.log("[coach] Stockfish skipped:", engineError);
         // Continue without engine evaluation
       }
       
-      // Generate audio for the analysis (only if not muted)
+      // Get pedagogical GPT commentary (Fix Pack v5)
+      const { getGPTComment } = await import("./lib/openai");
+      const comment = await getGPTComment({
+        fen,
+        bestMove: engineEval?.bestMove,
+        score: engineEval?.score,
+        mate: engineEval?.mate,
+        moveHistory: [],
+        language: settings?.language || 'english',
+        voiceMode: voiceMode || 'pro',
+        coachingStyle: settings?.coachingStyle || 'balanced'
+      });
+      
+      // Generate audio for the commentary (only if not muted)
       let audioUrl;
       if (!muted) {
         try {
-          const audioBuffer = await textToSpeech(analysis.analysis, voiceMode || 'pro');
+          const audioBuffer = await textToSpeech(comment.text, voiceMode || 'pro');
           
           // In a production app, you'd save this to object storage
           // For now, we'll convert to base64 data URL
           const base64Audio = audioBuffer.toString('base64');
           audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
         } catch (audioError) {
-          console.error("Audio generation error:", audioError);
+          console.error("[coach] Audio generation error:", audioError);
           // Continue without audio if it fails
         }
       }
@@ -123,14 +133,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         moveNumber,
         move,
         fen,
-        ...analysis,
+        analysis: comment.text, // Pedagogical commentary without numeric evals
         score: engineEval?.score,
         mate: engineEval?.mate,
         bestMove: engineEval?.bestMove,
         audioUrl,
       });
     } catch (error: any) {
-      console.error("Move analysis error:", error);
+      console.error("[coach] Move analysis error:", error);
       res.status(500).json({ error: error.message || "Failed to analyze move" });
     }
   });
@@ -169,6 +179,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get GPT coach comment (Fix Pack v5)
+  app.post("/api/coach/comment", async (req, res) => {
+    try {
+      const { fen, bestMove, score, mate, moveHistory, settings, voiceMode, muted } = req.body;
+      
+      if (!fen) {
+        return res.status(400).json({ error: "Missing FEN position" });
+      }
+
+      // Import getGPTComment function
+      const { getGPTComment } = await import("./lib/openai");
+      
+      // Get pedagogical commentary
+      const comment = await getGPTComment({
+        fen,
+        bestMove,
+        score,
+        mate,
+        moveHistory: moveHistory || [],
+        language: settings?.language || 'english',
+        voiceMode: voiceMode || 'pro',
+        coachingStyle: settings?.coachingStyle || 'balanced'
+      });
+      
+      // Generate audio for the comment (only if not muted)
+      let audioUrl;
+      if (!muted) {
+        try {
+          const audioBuffer = await textToSpeech(comment.text, voiceMode || 'pro');
+          const base64Audio = audioBuffer.toString('base64');
+          audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
+        } catch (audioError) {
+          console.error("Audio generation error:", audioError);
+        }
+      }
+
+      res.json({
+        comment: comment.text,
+        audioUrl,
+      });
+    } catch (error: any) {
+      console.error("Coach comment error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate coach comment" });
+    }
+  });
+
   // Get user settings
   app.get("/api/settings", async (req, res) => {
     try {
@@ -199,7 +255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         coachingStyle: z.enum(["aggressive", "positional", "tactical", "balanced", "defensive"]).optional(),
         difficulty: z.number().min(0).max(100).optional(),
         verbosity: z.number().min(0).max(100).optional(),
-        language: z.enum(["english", "spanish", "french", "german", "russian"]).optional(),
+        language: z.enum(["english", "spanish", "portuguese", "hindi", "french", "german", "russian"]).optional(),
       });
       
       const validationResult = settingsSchema.safeParse(req.body);
