@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Chess } from "chess.js";
 import { ChessBoard } from "@/components/ChessBoard";
+import { InteractiveChessBoard } from "@/components/InteractiveChessBoard";
 import { GameLoader } from "@/components/GameLoader";
 import { MoveControls } from "@/components/MoveControls";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
@@ -11,10 +12,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Game, MoveAnalysis } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Trophy, History, Target, Settings, Volume2, VolumeX } from "lucide-react";
+import { Trophy, History, Target, Settings, Volume2, VolumeX, Lightbulb, Eye, Upload } from "lucide-react";
 import { Link, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useVoice } from "@/hooks/use-voice";
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -101,6 +104,11 @@ export default function Trainer() {
   // Multi-game support
   const [availablePgns, setAvailablePgns] = useState<string[]>([]);
   const [currentGameIndex, setCurrentGameIndex] = useState(0);
+  
+  // Analysis mode support
+  const [isAnalysisMode, setIsAnalysisMode] = useState(false);
+  const [customFenInput, setCustomFenInput] = useState("");
+  const [analysisModeChess] = useState(new Chess());
 
   // Load game from history if gameId is in URL
   const { data: loadedGame } = useQuery<Game>({
@@ -328,6 +336,148 @@ export default function Trainer() {
     askQuestionMutation.mutate(question);
   };
 
+  // Toggle analysis mode
+  const handleToggleAnalysisMode = () => {
+    if (!isAnalysisMode) {
+      // Entering analysis mode - load current position from main game
+      try {
+        // Reset analysisModeChess to start fresh from current position
+        analysisModeChess.reset();
+        
+        // Replay moves up to current position
+        if (currentMove > 0 && moveHistory.length > 0) {
+          chess.reset();
+          for (let i = 0; i < currentMove; i++) {
+            chess.move(moveHistory[i]);
+          }
+          analysisModeChess.load(chess.fen());
+        } else {
+          // Start from initial position
+          analysisModeChess.load(STARTING_FEN);
+        }
+        
+        setIsAnalysisMode(true);
+        setIsAutoPlaying(false); // Stop auto-play when entering analysis mode
+        toast({
+          title: "Analysis Mode Enabled",
+          description: "You can now explore alternative moves from this position",
+        });
+      } catch (error) {
+        toast({
+          title: "Failed to Enter Analysis Mode",
+          description: "Invalid position",
+          variant: "destructive",
+        });
+      }
+    } else {
+      // Exiting analysis mode - restore position from main game at currentMove
+      try {
+        chess.reset();
+        let lastMoveInfo = null;
+        
+        // Replay moves up to current position to restore canonical state
+        for (let i = 0; i < currentMove; i++) {
+          const move = chess.move(moveHistory[i]);
+          if (i === currentMove - 1 && move) {
+            lastMoveInfo = { from: move.from, to: move.to };
+          }
+        }
+        
+        // Restore the board to the canonical position
+        setFen(chess.fen());
+        setLastMove(lastMoveInfo);
+        setIsAnalysisMode(false);
+        setCurrentAnalysis(null); // Clear analysis from exploratory moves
+        
+        // Reset analysisModeChess for next time
+        analysisModeChess.reset();
+        
+        toast({
+          title: "Analysis Mode Disabled",
+          description: "Returning to game view",
+        });
+      } catch (error) {
+        toast({
+          title: "Failed to Exit Analysis Mode",
+          description: "Error restoring game position",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  // Load custom FEN position
+  const handleLoadCustomFen = () => {
+    if (!customFenInput.trim()) {
+      toast({
+        title: "FEN Required",
+        description: "Please enter a valid FEN position",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const testChess = new Chess();
+      testChess.load(customFenInput.trim());
+      
+      // Valid FEN - load it
+      analysisModeChess.load(customFenInput.trim());
+      setFen(customFenInput.trim());
+      setLastMove(null);
+      setIsAnalysisMode(true);
+      setCurrentAnalysis(null);
+      
+      // Request AI analysis for this position
+      analyzeMoveMutation.mutate({
+        moveNumber: 0,
+        move: "Custom Position",
+        fen: customFenInput.trim(),
+      });
+      
+      toast({
+        title: "Position Loaded",
+        description: "Custom FEN position loaded for analysis",
+      });
+    } catch (error) {
+      toast({
+        title: "Invalid FEN",
+        description: "Please check your FEN string and try again",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle move in analysis mode
+  const handleAnalysisModeMove = (move: { from: string; to: string; promotion?: string }) => {
+    try {
+      const result = analysisModeChess.move({
+        from: move.from,
+        to: move.to,
+        promotion: move.promotion,
+      });
+      
+      if (result) {
+        const newFen = analysisModeChess.fen();
+        setFen(newFen);
+        setLastMove({ from: move.from, to: move.to });
+        
+        // Request AI analysis for this move
+        analyzeMoveMutation.mutate({
+          moveNumber: analysisModeChess.history().length,
+          move: result.san,
+          fen: newFen,
+        });
+        
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Invalid move in analysis mode:", error);
+      return false;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top Navigation */}
@@ -387,12 +537,33 @@ export default function Trainer() {
           <div className="trainer-grid h-full">
             {/* Left Column - Chess Board */}
             <div className="flex flex-col gap-6">
+              {/* Analysis Mode Banner */}
+              {isAnalysisMode && (
+                <div className="bg-primary/10 border border-primary/20 rounded-md p-3 flex items-center gap-2">
+                  <Lightbulb className="h-5 w-5 text-primary" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-primary">Analysis Mode Active</p>
+                    <p className="text-xs text-muted-foreground">Make moves to explore alternatives</p>
+                  </div>
+                </div>
+              )}
+              
               <div className="chess-board-wrapper">
-                <ChessBoard
-                  fen={fen}
-                  lastMove={lastMove}
-                  className="w-full h-full"
-                />
+                {isAnalysisMode ? (
+                  <InteractiveChessBoard
+                    fen={fen}
+                    onMove={handleAnalysisModeMove}
+                    showLegalMoves={true}
+                    className="w-full h-full"
+                    data-testid="interactive-chess-board"
+                  />
+                ) : (
+                  <ChessBoard
+                    fen={fen}
+                    lastMove={lastMove}
+                    className="w-full h-full"
+                  />
+                )}
               </div>
               
               <div className="flex justify-center">
@@ -405,8 +576,61 @@ export default function Trainer() {
                   onNext={() => goToMove(currentMove + 1)}
                   onLast={() => goToMove(moveHistory.length)}
                   onToggleAutoPlay={() => setIsAutoPlaying(!isAutoPlaying)}
-                  disabled={!game}
+                  disabled={!game || isAnalysisMode}
                 />
+              </div>
+              
+              {/* Analysis Mode Controls */}
+              <div className="flex flex-col gap-3">
+                <Button
+                  variant={isAnalysisMode ? "default" : "outline"}
+                  onClick={handleToggleAnalysisMode}
+                  className="w-full"
+                  data-testid="button-toggle-analysis-mode"
+                  disabled={!game && !isAnalysisMode}
+                >
+                  {isAnalysisMode ? (
+                    <>
+                      <Eye className="w-4 h-4 mr-2" />
+                      Exit Analysis Mode
+                    </>
+                  ) : (
+                    <>
+                      <Lightbulb className="w-4 h-4 mr-2" />
+                      Enter Analysis Mode
+                    </>
+                  )}
+                </Button>
+                
+                {/* Custom FEN Input */}
+                <div className="flex flex-col gap-2 p-4 bg-muted/50 rounded-md">
+                  <Label htmlFor="custom-fen" className="text-sm font-medium">
+                    Load Custom Position (FEN)
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="custom-fen"
+                      type="text"
+                      placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                      value={customFenInput}
+                      onChange={(e) => setCustomFenInput(e.target.value)}
+                      className="flex-1 font-mono text-xs"
+                      data-testid="input-custom-fen"
+                    />
+                    <Button
+                      onClick={handleLoadCustomFen}
+                      variant="default"
+                      size="default"
+                      data-testid="button-load-fen"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Load
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Enter a FEN position to analyze with the GM coach
+                  </p>
+                </div>
               </div>
             </div>
 
