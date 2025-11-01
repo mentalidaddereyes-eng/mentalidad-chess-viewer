@@ -281,14 +281,16 @@ export default function Trainer() {
       {/* Main Content */}
       <main className="flex-1 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 h-full">
-          <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-6 h-full">
+          <div className="trainer-grid h-full">
             {/* Left Column - Chess Board */}
             <div className="flex flex-col gap-6">
-              <ChessBoard
-                fen={fen}
-                lastMove={lastMove}
-                className="w-full max-w-2xl mx-auto"
-              />
+              <div className="chess-board-wrapper">
+                <ChessBoard
+                  fen={fen}
+                  lastMove={lastMove}
+                  className="w-full h-full"
+                />
+              </div>
               
               <div className="flex justify-center">
                 <MoveControls

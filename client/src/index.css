@@ -326,7 +326,8 @@
     inset: -1px;
   }
 
-  /* Mobile UI improvements - Paso 1/5 */
+  /* Mobile UI improvements - Commit A: Layout móvil PRO */
+  
   /* Ensure minimum touch target size for buttons on mobile */
   @media (max-width: 768px) {
     button {
@@ -368,5 +369,65 @@
   .overflow-auto, [data-radix-scroll-area-viewport] {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+  }
+  
+  /* Tablero responsivo con aspect-ratio 1:1 */
+  .chess-board-wrapper {
+    width: 100%;
+    max-width: 88vw;
+    margin: 0 auto;
+    aspect-ratio: 1 / 1;
+  }
+  
+  @media (min-width: 1024px) {
+    .chess-board-wrapper {
+      max-width: 600px;
+    }
+  }
+  
+  /* Sticky controls (botonera pegada al tablero) */
+  .move-controls-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: hsl(var(--background));
+    padding-block: 0.75rem;
+    border-top: 1px solid hsl(var(--border) / 0.5);
+    border-bottom: 1px solid hsl(var(--border) / 0.5);
+  }
+  
+  .dark .move-controls-sticky {
+    background: hsl(var(--background));
+  }
+  
+  /* Grid responsive para layout */
+  .trainer-grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: 1fr;
+  }
+  
+  @media (min-width: 1024px) {
+    .trainer-grid {
+      grid-template-columns: 1.5fr 1fr;
+    }
+  }
+  
+  /* Panel centrado con max-width */
+  .panel-centered {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+  
+  /* Scroll interno para move history */
+  .move-history-scroll {
+    max-height: 32vh;
+    overflow-y: auto;
+  }
+  
+  @media (min-width: 768px) {
+    .move-history-scroll {
+      max-height: none;
+    }
   }
 }

@@ -1,0 +1,113 @@
+Prompt Maestro — Fix total (layout + movimiento libre + multi-game) con tope de créditos
+
+Objetivo (end-to-end, sin ediciones manuales):
+
+Layout móvil PRO: tablero responsivo (sin ocupar toda la pantalla), lista de jugadas con scroll interno, botonera sticky pegada al tablero (sin bajar mil pixeles).
+
+Movimiento libre SIEMPRE: drag & drop + tap-to-move en cualquier modo (no solo puzzles).
+
+Multi-game: selector funciona con varios PGN; no se queda en una sola partida.
+
+Cache-bust / SW: botón “Actualizar versión” para forzar refresco del SW y cargar la build nueva.
+
+Créditos: máx. 2 commits (layout + lógica); nada de reinstalar deps.
+
+Reglas de costo/seguridad
+
+NO reinstalar dependencias ni toolchains.
+
+Máximo 2 commits:
+
+Commit A: CSS/HTML (layout móvil).
+
+Commit B: JS (movimiento libre + multi-game + SW update).
+
+Mantener voces/entrenador tal como están (no tocar APIs).
+
+Tareas — Commit A (CSS/HTML)
+
+CSS (style.css):
+
+Tablero responsivo y centrado:
+
+#board { width:100%; max-width:88vw; height:auto; aspect-ratio:1/1; margin:0 auto; display:block; }
+
+Contener scroll de jugadas:
+
+#movesBox { max-height:32vh; overflow:auto; }
+
+Grid responsivo:
+
+.wrap { display:grid; gap:10px; grid-template-columns:1fr 1fr; }
+
+@media (max-width:980px){ .wrap{ grid-template-columns:1fr; } }
+
+Panel centrado: .panel{ max-width:680px; margin:0 auto; }
+
+Botonera pegada:
+
+.controls.sticky{ position:sticky; top:0; z-index:5; background:inherit; padding-block:6px; border-top:1px solid rgba(0,0,0,.05); border-bottom:1px solid rgba(0,0,0,.05); }
+
+Botones táctiles cómodos:
+
+.controls button, .controls .chip input, .controls .chip span{ min-height:44px; font-size:16px; }
+
+Tipografía móvil:
+
+html{ text-size-adjust:100%; -webkit-text-size-adjust:100%; }
+
+HTML (index.html):
+
+En la botonera justo debajo del tablero (la de navegación del juego), añadir clase sticky al contenedor:
+
+Cambiar <div class="controls"> → <div class="controls sticky">
+
+Viewport accesible:
+
+Asegurar <meta name="viewport" content="width=device-width, initial-scale=1" /> (sin maximum-scale ni user-scalable).
+
+Entrega Commit A:
+"✅ Commit A — Layout móvil PRO (tablero responsivo, scroll interno, botonera sticky)"
+
+Tareas — Commit B (JS + SW)
+
+Movimiento libre SIEMPRE (main.js / board controller):
+
+Asegurar que onPointerDown/Move/Up y tap-to-move estén activos en todos los modos; eliminar/ignorar cualquier flag que lo limite a “puzzles”.
+
+Validar legalidad con chess.js y, al aplicar move, emitir onUserMove(fen,lastMove) para que Stockfish evalúe siempre.
+
+Tolerancia táctil 12–16px y preventDefault en pointer/touch para evitar scroll accidental del navegador.
+
+Multi-game real:
+
+Al cargar PGN con múltiples partidas: llenar <select id="gameSelect"> con todas las partidas (mostrar “Blancas vs Negras · evento/fecha” si existe).
+
+Al cambiar el select: reconstruir game desde esa partida y repintar el tablero + reset de historial/estado UI.
+
+Evitar que quede “pegado” a la primera.
+
+Entrenamiento por defecto:
+
+Si existe un toggle “Entrenamiento”, dejarlo ON por defecto al iniciar.
+
+Cada jugada del usuario dispara evaluación del motor y respuesta del entrenador (texto; voz solo si no está mute).
+
+Service Worker / cache-bust:
+
+Inyectar constante __APP_VERSION__ (ej. "20251031-fix") en el registro de SW.
+
+Añadir botón “Actualizar versión” en la UI que haga postMessage('SKIP_WAITING') al SW y luego location.reload() al recibir controllerchange.
+
+QA (logs visibles en consola):
+
+[ui] drag/tap ok — training=ON
+
+[games] loaded: N, current: idx
+
+[coach] onUserMove fen=...
+
+[sw] version=20251031-fix ready
+
+Entrega Commit B:
+"✅ Commit B — Movimiento libre + multi-game + SW update"

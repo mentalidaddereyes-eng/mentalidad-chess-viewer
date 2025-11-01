@@ -28,7 +28,7 @@ export function MoveControls({
   const isAtEnd = currentMove >= totalMoves;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 move-controls-sticky md:static" data-testid="container-move-controls">
       {/* Move counter */}
       <div className="text-center">
         <div className="text-sm text-muted-foreground mb-1">Move</div>
