@@ -3,6 +3,16 @@
 ## Overview
 GM Trainer is a sophisticated web application for chess enthusiasts, combining game analysis with AI-powered voice coaching. It enables users to import chess games, receive real-time AI commentary, and interact with an AI coach using voice commands. The project aims to provide an immersive and interactive learning experience, leveraging advanced AI for personalized chess training. Key capabilities include PGN viewing, Lichess integration, AI move analysis, voice coaching, and tactics puzzle training with progress tracking.
 
+## Recent Changes
+
+### November 1, 2025 - Free Analysis Mode Default & UI Improvements
+- **Default to Free Analysis**: Application now starts in free analysis mode (isAnalysisMode = true on load) for immediate interactive practice
+- **Automatic Analysis**: AI analysis (Stockfish + GPT commentary) triggers automatically on every move in free analysis mode
+- **FEN Auto-Analysis**: Loading a custom FEN position now immediately triggers AI analysis
+- **Confined Scroll**: Implemented max-height: 40vh on Move History and analysis panels to eliminate page-level scrolling
+- **UI Cleanup**: Removed emojis from interface (banner now shows "Free Analysis Mode")
+- **Service Worker**: Updated to version 2025-11-01-free-analysis-fix
+
 ## User Preferences
 - I want iterative development.
 - Ask before making major changes.
@@ -13,7 +23,7 @@ GM Trainer is a sophisticated web application for chess enthusiasts, combining g
 ## System Architecture
 
 ### UI/UX Decisions
-The application features a clean, modern design with a dark mode theme using Tailwind CSS and Shadcn UI. The layout prioritizes usability with a responsive grid system (1.5fr:1fr on desktop, stacked on mobile) for the board and controls. The chess board maintains a consistent square aspect ratio (1:1) across all screen sizes. Consistent spacing, card-based content grouping, and clear typography (Inter, JetBrains Mono) enhance readability and user experience. Interactive elements utilize a primary blue color scheme, and chess boards maintain classic Lichess colors. Mobile interactions are optimized with tap-to-move, robust touch drag & drop, large promotion dialogs, confined scroll areas (max-h-[40vh] for move history), and sticky controls at the bottom. The viewport is configured without maximum-scale to support accessibility features.
+The application features a clean, modern design with a dark mode theme using Tailwind CSS and Shadcn UI. The layout prioritizes usability with a responsive grid system (1.5fr:1fr on desktop, stacked on mobile) for the board and controls. The chess board maintains a consistent square aspect ratio (1:1) across all screen sizes. Consistent spacing, card-based content grouping, and clear typography (Inter, JetBrains Mono) enhance readability and user experience. Interactive elements utilize a primary blue color scheme, and chess boards maintain classic Lichess colors. Mobile interactions are optimized with tap-to-move, robust touch drag & drop, large promotion dialogs, confined scroll areas with max-height: 40vh for Move History and analysis panels (prevents page-level scrolling), and sticky controls at the bottom. The viewport is configured without maximum-scale to support accessibility features. All UI elements follow design guidelines: no emojis in interface elements.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Tailwind CSS, Shadcn UI. Features a custom-built PGN Chess Viewer, responsive design, and persistent theme preference.
@@ -37,8 +47,8 @@ The application features a clean, modern design with a dark mode theme using Tai
 - **PGN Chess Viewer**: Custom board with coordinate labels, move highlighting, and aspect-ratio-based square rendering.
 - **Multi-Game PGN**: Automatic detection of multiple games in PGN, dropdown selector (only visible when 2+ games), metadata parsing with CRLF normalization.
 - **Lichess Integration**: Game import by URL or username (max 10 games), daily puzzle import from Lichess API with smart data mapping.
-- **AI Move Analysis**: Real-time commentary and evaluation badges.
-- **Analysis Mode**: Free analysis mode in Trainer page allowing users to explore alternative moves from any position. Features seamless toggle between view-only mode and interactive mode, with proper state restoration when switching. Users can make moves on the board and receive AI analysis for each exploratory move. State management ensures the canonical game position is always restored when exiting analysis mode.
+- **AI Move Analysis**: Real-time commentary and evaluation badges. Automatic analysis triggers on every move in free analysis mode.
+- **Analysis Mode**: Free analysis mode is now the default experience (isAnalysisMode = true on init). Interactive board is ready immediately, allowing users to explore positions and receive automatic AI analysis (Stockfish + GPT) for each move. Features seamless toggle between view-only mode and interactive mode, with proper state restoration when switching. State management ensures the canonical game position is always restored when exiting analysis mode.
 - **Custom Position Analysis**: FEN input field allowing users to load and analyze any chess position. Includes validation, error handling, and automatic AI analysis for custom positions. Users can paste FEN strings and receive immediate GM-level commentary on the position.
 - **Voice Coaching**: Text-to-speech responses with selectable voice personalities, persistent mute state, and quick controls.
 - **Voice Questions**: Browser-based speech recognition for user queries.
