@@ -152,7 +152,6 @@ Example BAD responses (NEVER DO THIS):
         },
       ],
       max_completion_tokens: 250,
-      temperature: 0.8, // Slightly creative for more human responses
     });
 
     const text = response.choices[0].message.content || "Let's analyze this interesting position together.";

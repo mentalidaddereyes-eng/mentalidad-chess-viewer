@@ -12,35 +12,38 @@ export type VoiceMode = 'pro' | 'kids';
 export type Language = 'spanish' | 'english' | 'portuguese' | 'hindi' | 'french' | 'german' | 'russian';
 
 // Multilingual Voice IDs mapping (language + mode)
-// Hotfix v5.1.1: Each language has Pro (Leo) and Kids (Augusto) voices
+// Hotfix v5.1.1: Using ElevenLabs eleven_multilingual_v2 model for automatic language adaptation
+// Default voices: Adam (Leo/Pro) and Antoni (Augusto/Kids) adapt to text language automatically
+// For custom voices per language, set environment variables:
+//   ELEVENLABS_VOICE_PRO_ES, ELEVENLABS_VOICE_PRO_PT, ELEVENLABS_VOICE_KIDS_HI, etc.
 const VOICE_MAP: Record<Language, Record<VoiceMode, string>> = {
   spanish: {
-    pro: process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB", // Leo (Adam) - Spanish
-    kids: process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG", // Augusto (Antoni) - Spanish
+    pro: process.env.ELEVENLABS_VOICE_PRO_ES || process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB", // Leo (Adam) - adapts to Spanish via eleven_multilingual_v2
+    kids: process.env.ELEVENLABS_VOICE_KIDS_ES || process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG", // Augusto (Antoni) - adapts to Spanish
   },
   english: {
-    pro: process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB", // Leo (Adam) - English
-    kids: process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG", // Augusto (Antoni) - English
+    pro: process.env.ELEVENLABS_VOICE_PRO_EN || process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB",
+    kids: process.env.ELEVENLABS_VOICE_KIDS_EN || process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG",
   },
   portuguese: {
-    pro: process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB", // Leo (Adam) - Portuguese
-    kids: process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG", // Augusto (Antoni) - Portuguese
+    pro: process.env.ELEVENLABS_VOICE_PRO_PT || process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB",
+    kids: process.env.ELEVENLABS_VOICE_KIDS_PT || process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG",
   },
   hindi: {
-    pro: process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB", // Leo (Adam) - Hindi
-    kids: process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG", // Augusto (Antoni) - Hindi
+    pro: process.env.ELEVENLABS_VOICE_PRO_HI || process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB",
+    kids: process.env.ELEVENLABS_VOICE_KIDS_HI || process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG",
   },
   french: {
-    pro: process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB", // Leo (Adam) - French
-    kids: process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG", // Augusto (Antoni) - French
+    pro: process.env.ELEVENLABS_VOICE_PRO_FR || process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB",
+    kids: process.env.ELEVENLABS_VOICE_KIDS_FR || process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG",
   },
   german: {
-    pro: process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB", // Leo (Adam) - German
-    kids: process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG", // Augusto (Antoni) - German
+    pro: process.env.ELEVENLABS_VOICE_PRO_DE || process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB",
+    kids: process.env.ELEVENLABS_VOICE_KIDS_DE || process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG",
   },
   russian: {
-    pro: process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB", // Leo (Adam) - Russian
-    kids: process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG", // Augusto (Antoni) - Russian
+    pro: process.env.ELEVENLABS_VOICE_PRO_RU || process.env.ELEVENLABS_VOICE_PRO || "pNInz6obpgDQGcFmaJgB",
+    kids: process.env.ELEVENLABS_VOICE_KIDS_RU || process.env.ELEVENLABS_VOICE_KIDS || "VR6AewLTigWG4xSOukaG",
   },
 };
 
