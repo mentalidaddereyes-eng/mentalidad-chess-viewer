@@ -3,8 +3,7 @@ const APP_VERSION = '20251101-mobile-multi';
 
 self.addEventListener('install', (event) => {
   console.log('[sw] version:', APP_VERSION, 'installed');
-  // Skip waiting to activate immediately
-  self.skipWaiting();
+  // Don't skip waiting automatically - wait for user action
 });
 
 self.addEventListener('activate', (event) => {

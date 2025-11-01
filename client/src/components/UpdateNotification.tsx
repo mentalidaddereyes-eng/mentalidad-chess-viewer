@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RefreshCw } from "lucide-react";
@@ -6,6 +6,7 @@ import { RefreshCw } from "lucide-react";
 export function UpdateNotification() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  const updateRequestedRef = useRef(false);
 
   useEffect(() => {
     // Register service worker
@@ -34,15 +35,20 @@ export function UpdateNotification() {
         });
 
       // Listen for controller change (new SW activated)
+      // Only reload if the user requested the update
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('[sw] controller changed, reloading page');
-        window.location.reload();
+        if (updateRequestedRef.current) {
+          console.log('[sw] controller changed, reloading page');
+          window.location.reload();
+        }
       });
     }
   }, []);
 
   const handleUpdate = () => {
     if (registration?.waiting) {
+      // Mark that we requested the update
+      updateRequestedRef.current = true;
       // Tell the waiting SW to skip waiting
       registration.waiting.postMessage('SKIP_WAITING');
     }

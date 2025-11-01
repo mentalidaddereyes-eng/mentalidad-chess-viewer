@@ -20,18 +20,30 @@ import { useVoice } from "@/hooks/use-voice";
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 // Split multi-game PGN into individual games
+// Handles both LF and CRLF line endings
 function splitPgn(pgn: string): string[] {
-  const rawGames = pgn.split(/\n\n\[Event/).filter(g => g.trim());
-  return rawGames.map((game, index) => {
-    if (index === 0) return game;
-    return `[Event${game}`;
-  });
+  // Normalize to LF for consistent processing
+  const normalized = pgn.replace(/\r\n/g, '\n');
+  
+  // Split on double newline followed by [Event tag
+  const rawGames = normalized.split(/\n\n(?=\[Event)/).filter(g => g.trim());
+  
+  // If no split occurred, return the whole PGN as a single game
+  if (rawGames.length === 0) {
+    return [pgn.trim()];
+  }
+  
+  return rawGames;
 }
 
 // Parse basic metadata from PGN
+// Handles both LF and CRLF line endings
 function parsePgnMeta(pgn: string): { white: string; black: string; event?: string; date?: string } {
-  const lines = pgn.split("\n");
+  // Normalize line endings
+  const normalized = pgn.replace(/\r\n/g, '\n');
+  const lines = normalized.split("\n");
   const meta: any = {};
+  
   for (const line of lines) {
     if (line.startsWith("[")) {
       const match = line.match(/\[(\w+)\s+"(.+)"\]/);
@@ -41,6 +53,7 @@ function parsePgnMeta(pgn: string): { white: string; black: string; event?: stri
       }
     }
   }
+  
   return {
     white: meta.white || "White",
     black: meta.black || "Black",
@@ -285,6 +298,19 @@ export default function Trainer() {
     chess.loadPgn(selectedPgn);
     const moves = chess.history();
     chess.reset();
+    
+    // Parse metadata from the selected PGN and update game state
+    const meta = parsePgnMeta(selectedPgn);
+    if (game) {
+      setGame({
+        ...game,
+        white: meta.white,
+        black: meta.black,
+        event: meta.event,
+        date: meta.date,
+        pgn: selectedPgn,
+      });
+    }
     
     setMoveHistory(moves);
     setCurrentMove(0);
