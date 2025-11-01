@@ -166,15 +166,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get AI answer
       const answer = await answerQuestion(question, context, settings);
       
-      // Generate audio for the answer (only if not muted) - Hotfix v5.1.1: language support
+      // Generate audio for the answer (only if not muted) - Cost Saver Pack v6.0: plan-aware TTS
       let audioUrl;
       if (!muted) {
         try {
-          const audioBuffer = await textToSpeech(
-            answer, 
-            voiceMode || 'pro',
-            settings?.language || 'spanish' // Default Spanish per hotfix v5.1.1
-          );
+          // Cost Saver Pack v6.0: Use plan-aware TTS provider
+          const planMode: PlanMode = (req.query.plan as PlanMode) || 'free';
+          const provider = getTTSProvider(planMode);
+          
+          const audioBuffer = await generateSpeech(answer, {
+            provider,
+            language: (settings?.language as any) || 'spanish',
+            voiceMode: voiceMode || 'pro',
+          });
           const base64Audio = audioBuffer.toString('base64');
           audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
         } catch (audioError) {
