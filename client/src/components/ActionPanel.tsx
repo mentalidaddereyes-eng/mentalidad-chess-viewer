@@ -1,0 +1,197 @@
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { 
+  RotateCcw, 
+  Upload, 
+  FlipVertical,
+  Undo2,
+  Redo2,
+  Play,
+  Pause,
+  Download,
+  Settings,
+  Swords,
+  Home
+} from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+interface ActionPanelProps {
+  isPlayVsCoach: boolean;
+  playerColor: "white" | "black";
+  isAutoPlaying: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  onNewGame: () => void;
+  onLoadPgn: () => void;
+  onLoadFen: () => void;
+  onFlipBoard: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onToggleAutoPlay: () => void;
+  onExportPgn: () => void;
+  onSettings: () => void;
+  onTogglePlayVsCoach: () => void;
+  onPlayerColorChange: (color: "white" | "black") => void;
+}
+
+export function ActionPanel({
+  isPlayVsCoach,
+  playerColor,
+  isAutoPlaying,
+  canUndo,
+  canRedo,
+  onNewGame,
+  onLoadPgn,
+  onLoadFen,
+  onFlipBoard,
+  onUndo,
+  onRedo,
+  onToggleAutoPlay,
+  onExportPgn,
+  onSettings,
+  onTogglePlayVsCoach,
+  onPlayerColorChange,
+}: ActionPanelProps) {
+  return (
+    <Card className="h-full flex flex-col gap-2 p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Swords className="h-5 w-5 text-primary" />
+        <h2 className="font-semibold text-sm">Actions</h2>
+      </div>
+
+      {/* New/Reset */}
+      <Button
+        variant="outline"
+        onClick={onNewGame}
+        className="w-full justify-start h-9 text-sm"
+        data-testid="button-new-game"
+      >
+        <Home className="w-4 h-4 mr-2" />
+        New / Reset
+      </Button>
+
+      {/* Load PGN */}
+      <Button
+        variant="outline"
+        onClick={onLoadPgn}
+        className="w-full justify-start h-9 text-sm"
+        data-testid="button-load-pgn"
+      >
+        <Upload className="w-4 h-4 mr-2" />
+        Load PGN
+      </Button>
+
+      {/* Load FEN */}
+      <Button
+        variant="outline"
+        onClick={onLoadFen}
+        className="w-full justify-start h-9 text-sm"
+        data-testid="button-load-fen-action"
+      >
+        <Upload className="w-4 h-4 mr-2" />
+        Load FEN
+      </Button>
+
+      <Separator className="my-2" />
+
+      {/* Board Controls */}
+      <Button
+        variant="outline"
+        onClick={onFlipBoard}
+        className="w-full justify-start h-9 text-sm"
+        data-testid="button-flip-board"
+      >
+        <FlipVertical className="w-4 h-4 mr-2" />
+        Flip Board
+      </Button>
+
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          onClick={onUndo}
+          disabled={!canUndo}
+          className="flex-1 h-9 text-sm"
+          data-testid="button-undo"
+        >
+          <Undo2 className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="outline"
+          onClick={onRedo}
+          disabled={!canRedo}
+          className="flex-1 h-9 text-sm"
+          data-testid="button-redo"
+        >
+          <Redo2 className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <Separator className="my-2" />
+
+      {/* Play vs Coach Toggle */}
+      <Button
+        variant={isPlayVsCoach ? "default" : "outline"}
+        onClick={onTogglePlayVsCoach}
+        className="w-full justify-start h-9 text-sm"
+        data-testid="button-toggle-play-vs-coach"
+      >
+        <Swords className="w-4 h-4 mr-2" />
+        Play vs Coach
+      </Button>
+
+      {/* Color selector when playing vs coach */}
+      {isPlayVsCoach && (
+        <div className="flex flex-col gap-2 p-2 bg-muted/30 rounded-md">
+          <Label className="text-xs">I play with:</Label>
+          <Select value={playerColor} onValueChange={onPlayerColorChange}>
+            <SelectTrigger className="h-8 text-xs" data-testid="select-player-color">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="white">White</SelectItem>
+              <SelectItem value="black">Black</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <Separator className="my-2" />
+
+      {/* Auto-play */}
+      <Button
+        variant="outline"
+        onClick={onToggleAutoPlay}
+        disabled={isPlayVsCoach}
+        className="w-full justify-start h-9 text-sm"
+        data-testid="button-toggle-autoplay"
+      >
+        {isAutoPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+        {isAutoPlaying ? "Pause" : "Auto-play"}
+      </Button>
+
+      {/* Export PGN */}
+      <Button
+        variant="outline"
+        onClick={onExportPgn}
+        className="w-full justify-start h-9 text-sm"
+        data-testid="button-export-pgn"
+      >
+        <Download className="w-4 h-4 mr-2" />
+        Export PGN
+      </Button>
+
+      {/* Settings */}
+      <Button
+        variant="outline"
+        onClick={onSettings}
+        className="w-full justify-start h-9 text-sm"
+        data-testid="button-settings-panel"
+      >
+        <Settings className="w-4 h-4 mr-2" />
+        Settings
+      </Button>
+    </Card>
+  );
+}

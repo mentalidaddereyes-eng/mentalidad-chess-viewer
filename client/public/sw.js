@@ -1,5 +1,5 @@
 // Service Worker for GM Trainer - Cache busting and version updates
-const APP_VERSION = '2025-11-01-free-analysis-fix';
+const APP_VERSION = '2025-11-01-chesscom-plus';
 
 self.addEventListener('install', (event) => {
   console.log('[sw] version:', APP_VERSION, 'installed');

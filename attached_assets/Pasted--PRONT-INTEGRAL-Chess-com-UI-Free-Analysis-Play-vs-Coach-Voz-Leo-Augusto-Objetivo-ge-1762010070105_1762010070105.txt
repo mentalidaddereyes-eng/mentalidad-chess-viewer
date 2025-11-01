@@ -1,0 +1,177 @@
+🔥 PRONT INTEGRAL — “Chess.com+ UI + Free Analysis + Play vs Coach + Voz (Leo/Augusto)”
+
+Objetivo general (todo junto, low-cost):
+
+Tablero interactivo desde el inicio (sin PGN), Análisis Libre ON por defecto.
+
+Jugar contra el Entrenador: el usuario elige color; la IA mueve el lado opuesto y explica mientras juega (texto + voz).
+
+UI estilo chess.com con columnas laterales: acciones a la izquierda, análisis/historial a la derecha.
+
+Botones compactos bajo el tablero (40px alto máx), casi sin margen.
+
+Switch Pro/Niño visible en la barra superior (no debajo).
+
+Anti-scroll: solo scrollean paneles internos.
+
+Multi-PGN real en selector.
+
+Voz: una sola a la vez; Leo = Pro, Augusto = Niño.
+
+Eliminar “Load Custom Position (FEN)” del tablero; mover a Settings → Advanced.
+
+Reglas de costo
+
+Un solo commit. Si necesitas dos, combina cambios y entrega igual en un commit final.
+
+No reinstales dependencias ni cambies toolchain.
+
+Mantén lo ya integrado (Stockfish, voces, etc.).
+
+Tareas (detalle)
+A) Layout tipo chess.com (desktop) + móvil
+
+Implementa grid de 3 columnas (desktop ≥1024px):
+grid-template-columns: 280px minmax(480px, 720px) 360px; gap: 10–12px;
+
+Izquierda (Acciones) – barra vertical con botones grandes (sticky al tablero):
+New/Reset · Load PGN · Load FEN (abre modal) · Flip · Undo · Redo · Play/Pause Auto · Export PGN · Settings · (Toggle) Play vs Coach
+
+Centro (Tablero) – canvas cuadrado, centrado, max 720px, aspect-ratio: 1/1.
+
+Debajo del tablero: navegación compacta ⏮ ⏪ ▶ ⏩ ⏭ (alto 36–40px, gap ≤ 6px, mt ≤ 6px, mb ≤ 8px).
+
+Derecha (Análisis) – tabs: Analysis, Moves, Coach (o Ask integrado). Cada tab con
+max-height: 40vh; overflow: auto; sin scroll de página.
+
+Móvil (≤1023px):
+
+Apilar Tablero arriba y panel lateral abajo como sheet/tabs (Acciones, Análisis, Movidas).
+
+Agrega dock inferior de 5 botones: Load · ◀ · ▶ · Flip · 🎙️.
+
+B) Análisis libre por defecto (sin PGN)
+
+Al cargar: game = new Chess(); drag & drop + tap-to-move activados.
+
+onUserMove(fen,lastMove):
+
+Validar con chess.js; actualizar game.
+
+Lanzar Stockfish (depth 12–15, timeout 2s); mostrar eval, best move, PV corta, y flecha si “Mostrar sugerencias” está ON.
+
+Llamar a coachExplain con tono según modo:
+
+Niños (Augusto): 1–2 frases simples y motivadoras.
+
+Pro (Leo): eval breve, idea (táctica/posicional) y mini-plan.
+
+Voz: si muted=false, reproducir con canal único (detén la anterior antes de hablar).
+
+C) Jugar contra el Entrenador (tipo chess.com, mejorado)
+
+Toggle “Play vs Coach” (panel izquierdo).
+
+Selector “Juego con: Blancas / Negras”.
+
+Lógica de turnos:
+
+Si es turno de IA (Stockfish/coach): calcula mejor jugada, mueve en el tablero, explica (texto y voz si activo).
+
+Si es turno del usuario: mueve; analiza y aconseja.
+
+Botones útiles: Sugerir jugada (marca flecha, no mueve), Undo/Redo, Reset, Flip.
+
+En móviles, reduce depth a 10–12 si lag.
+
+D) Voz y modos (switch en la barra superior)
+
+Coloca un SegmentedControl visible arriba: Pro | Niño (no debajo).
+
+Al cambiar de modo:
+
+Voz: Pro => ELEVENLABS_VOICE_PRO, Niño => ELEVENLABS_VOICE_KIDS (usar secrets).
+
+Tono: adaptar longitudes/explicaciones como arriba.
+
+Persistir en localStorage('coachMode').
+
+Botón 🎙️/🔇 cercano al switch. muted=true por defecto.
+
+E) Compactar botonería bajo tablero
+
+Estilos sugeridos:
+Contenedor: mt-1 mb-2 flex items-center justify-center gap-1
+Botones: h-9 px-3 text-sm rounded-md (alto ≤ 40px, fuente 14px).
+
+Nada de márgenes grandes ni bloques extra bajo el tablero.
+
+F) Eliminar FEN del tablero; mover a Settings → Advanced
+
+Quita el cuadro “Load Custom Position (FEN)” del cuerpo principal.
+
+En Settings → Advanced, agrega toggle “Enable FEN Loader”:
+
+Si ON, muestra campo FEN + “Cargar FEN” en un modal o en la pestaña “Acciones”.
+
+onLoadFEN(): valida Chess.validate_fen, repinta y evalúa de inmediato.
+
+G) Multi-PGN real
+
+Al importar PGN con varias partidas: llenar <select id="gameSelect"> con todas (e.g., “Blancas vs Negras · Evento · Fecha”).
+
+Cambiar selección → reconstruir game, repintar, limpiar historial visual, seguir análisis libre.
+
+H) Anti-scroll global + performance
+
+html, body, #root { height: 100%; } contenedor principal min-height: 100dvh; overflow: hidden;
+
+Solo #analysisTab, #movesTab, #coachTab con scroll interno (max-height: 40vh; overflow:auto;).
+
+Debounce de análisis 350–500ms; desactivar evaluación mientras se arrastra una pieza.
+
+Ventaja blanca/negra con colores consistentes (mantener lo ya implementado).
+
+I) QA y logs
+
+Al iniciar:
+"[mode] free-analysis ready | training=ON | interactive=drag+tap"
+
+Al activar Play vs Coach:
+"[mode] play-vs-coach | side=w|b"
+
+En jugadas:
+"[coach] onUserMove fen=... eval=..." y "[coach] engineMove ..."
+
+Multi-PGN:
+"[games] loaded: N | current: i"
+
+Voz:
+"[voice] mode=Pro|Kids | muted=false" (una sola a la vez).
+
+J) Cache-bust / SW
+
+__APP_VERSION__ = "2025-11-01-chesscom-plus"
+
+Botón “Actualizar versión” que haga postMessage('SKIP_WAITING') → controllerchange → location.reload().
+
+Criterios de aceptación (no cierres hasta cumplir)
+
+✅ Sin PGN, puedo mover piezas y obtener evaluación + explicación.
+
+✅ Play vs Coach: elijo color; la IA mueve lo contrario y explica mientras juega.
+
+✅ UI en columnas laterales (acciones izq., análisis/movidas der.); sin scroll de página.
+
+✅ Botones compactos bajo tablero (≤ 40px, poco margen).
+
+✅ Switch Pro/Niño visible arriba; cambia voz (Leo/Augusto) y tono al instante; persiste.
+
+✅ Multi-PGN funcional (selector de partidas).
+
+✅ FEN loader quitado del tablero; disponible en Settings → Advanced.
+
+✅ Una sola voz a la vez; sin eco ni solapamientos.
+
+Entrega (un commit):
+✅ Chess.com+ UI + Free Analysis + Play vs Coach + Voz Pro/Niño + Anti-scroll + Multi-PGN (1 commit)

@@ -400,7 +400,38 @@
     background: hsl(var(--background));
   }
   
-  /* Grid responsive para layout */
+  /* Chess.com+ Layout: Fixed height with proper scroll */
+  html, body, #root {
+    height: 100%;
+  }
+
+  /* Chess.com+ 3-column grid layout */
+  .chesscom-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .chesscom-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: 1fr;
+    padding: 0.75rem 0.75rem 5rem; /* Extra bottom padding for mobile dock */
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  @media (min-width: 1024px) {
+    .chesscom-grid {
+      grid-template-columns: 280px minmax(480px, 720px) 360px;
+      gap: 0.75rem;
+      padding: 0.75rem; /* Normal padding on desktop */
+      overflow-y: auto; /* Allow scroll on desktop too for short screens */
+    }
+  }
+  
+  /* Grid responsive para layout (old - keep for compatibility) */
   .trainer-grid {
     display: grid;
     gap: 1.5rem;
