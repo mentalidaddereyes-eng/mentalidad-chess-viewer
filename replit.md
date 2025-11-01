@@ -253,7 +253,40 @@ GM Trainer is a sophisticated web application that combines chess game analysis 
   - Returns 400 errors with clear messages for invalid inputs
 - **API Endpoint**: `GET /api/puzzles?minRating=800&maxRating=1200&themes=Fork,Pin`
 
+### Mobile UI Pro (NEW - November 1, 2025) ✅ Paso 1/5
+- **Tap-to-move interactions**
+  - Touch tolerance: 14px to distinguish tap from drag
+  - Tap piece → tap destination for moves
+  - Works for regular moves, captures, and promotions
+  - Reselection supported: tap different piece to switch
+- **Touch drag & drop** 
+  - Robust mobile support with pointer/touch events
+  - Prevents accidental page scrolling during drag
+  - Visual feedback with opacity changes
+- **Large promotion dialog**
+  - Touch-friendly buttons (88px+ min-height)
+  - Grid layout with clear piece icons and labels
+  - Supports click, drag, and tap interactions
+- **Confined scroll areas**
+  - Move history list: max-height 40vh on mobile, full on desktop
+  - overflow:auto prevents infinite page scroll
+  - Smooth touch scrolling with overscroll containment
+- **Mobile typography & touch targets**
+  - All buttons ≥44px min-height on mobile
+  - Base font size: 16-18px for readability
+  - Touch highlight color for visual feedback
+  - Readable line-height (1.5) for better scanning
+- **Technical implementation**
+  - Touch event handlers: handleTouchStart, handleTouchMove, handleTouchEnd
+  - State management: selectedSquare, touchStartSquare, isDragging refs
+  - Debug logging: [ui] prefixed console logs for mobile debugging
+  - Player detection: distinguishes own pieces from enemy pieces
+
 ## Future Enhancements
+- Paso 2/5: Game import modal improvements (drag & drop PGN files)
+- Paso 3/5: Voice controls optimization for mobile
+- Paso 4/5: Analysis panel responsive layout improvements
+- Paso 5/5: Performance optimizations and PWA support
 - Opening repertoire training mode with spaced repetition
 - Endgame practice mode with theoretical positions
 - Full database integration for user settings

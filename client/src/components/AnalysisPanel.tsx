@@ -92,41 +92,43 @@ export function AnalysisPanel({
           </div>
         )}
         
-        {/* Move history */}
-        <div className="flex-1 min-h-0">
+        {/* Move history with confined scrolling for mobile */}
+        <div className="flex-1 min-h-0 flex flex-col">
           <div className="text-sm font-semibold mb-2 text-muted-foreground">Move History</div>
-          <ScrollArea className="h-full border rounded-md bg-muted/30">
-            <div className="p-4 font-mono text-sm" data-testid="text-move-history">
-              {moveHistory.length === 0 ? (
-                <p className="text-muted-foreground">No moves yet</p>
-              ) : (
-                <div className="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-1">
-                  {moveHistory.map((move, index) => {
-                    if (index % 2 === 0) {
-                      const moveNumber = Math.floor(index / 2) + 1;
-                      const whiteMove = moveHistory[index];
-                      const blackMove = moveHistory[index + 1];
-                      const isCurrentWhite = currentMove === index + 1;
-                      const isCurrentBlack = currentMove === index + 2;
-                      
-                      return (
-                        <div key={index} className="contents">
-                          <div className="text-muted-foreground">{moveNumber}.</div>
-                          <div className={isCurrentWhite ? "font-bold text-primary" : ""}>
-                            {whiteMove}
+          <div className="flex-1 min-h-0 max-h-[40vh] md:max-h-full overflow-hidden">
+            <ScrollArea className="h-full border rounded-md bg-muted/30">
+              <div className="p-4 font-mono text-sm md:text-base" data-testid="text-move-history">
+                {moveHistory.length === 0 ? (
+                  <p className="text-muted-foreground">No moves yet</p>
+                ) : (
+                  <div className="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-1">
+                    {moveHistory.map((move, index) => {
+                      if (index % 2 === 0) {
+                        const moveNumber = Math.floor(index / 2) + 1;
+                        const whiteMove = moveHistory[index];
+                        const blackMove = moveHistory[index + 1];
+                        const isCurrentWhite = currentMove === index + 1;
+                        const isCurrentBlack = currentMove === index + 2;
+                        
+                        return (
+                          <div key={index} className="contents">
+                            <div className="text-muted-foreground">{moveNumber}.</div>
+                            <div className={isCurrentWhite ? "font-bold text-primary" : ""}>
+                              {whiteMove}
+                            </div>
+                            <div className={isCurrentBlack ? "font-bold text-primary" : ""}>
+                              {blackMove || ""}
+                            </div>
                           </div>
-                          <div className={isCurrentBlack ? "font-bold text-primary" : ""}>
-                            {blackMove || ""}
-                          </div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })}
-                </div>
-              )}
-            </div>
-          </ScrollArea>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
         </div>
       </CardContent>
     </Card>

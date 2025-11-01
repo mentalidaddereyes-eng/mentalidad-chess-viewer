@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Chess } from "chess.js";
 
 interface InteractiveChessBoardProps {
@@ -17,6 +17,9 @@ const pieceUnicode: Record<string, string> = {
   "K": "♔", "Q": "♕", "R": "♖", "B": "♗", "N": "♘", "P": "♙",
   "k": "♚", "q": "♛", "r": "♜", "b": "♝", "n": "♞", "p": "♟"
 };
+
+// Touch tolerance in pixels for distinguishing tap from drag
+const TOUCH_TOLERANCE = 14;
 
 function parseFen(fen: string): Map<string, string> {
   const board = new Map<string, string>();
@@ -53,6 +56,15 @@ export function InteractiveChessBoard({
   const [legalMoves, setLegalMoves] = useState<string[]>([]);
   const [draggedSquare, setDraggedSquare] = useState<string | null>(null);
   
+  // Touch interaction state
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const touchStartSquare = useRef<string | null>(null);
+  const isDragging = useRef(false);
+  
+  // Promotion dialog state
+  const [showPromotionDialog, setShowPromotionDialog] = useState(false);
+  const [pendingMove, setPendingMove] = useState<{ from: string; to: string } | null>(null);
+  
   useEffect(() => {
     try {
       chess.load(fen);
@@ -76,6 +88,35 @@ export function InteractiveChessBoard({
     }
   };
   
+  const isPromotion = (from: string, to: string): boolean => {
+    const piece = board.get(from);
+    if (!piece || (piece.toLowerCase() !== 'p')) return false;
+    
+    // Check if pawn is moving to last rank
+    const toRank = to[1];
+    return (piece === 'P' && toRank === '8') || (piece === 'p' && toRank === '1');
+  };
+  
+  const executeMove = (from: string, to: string, promotion?: string) => {
+    const move = { from, to, promotion };
+    const success = onMove?.(move) ?? false;
+    
+    if (success) {
+      setSelectedSquare(null);
+      setLegalMoves([]);
+      setShowPromotionDialog(false);
+      setPendingMove(null);
+    }
+    
+    return success;
+  };
+  
+  const handlePromotionChoice = (piece: string) => {
+    if (pendingMove) {
+      executeMove(pendingMove.from, pendingMove.to, piece);
+    }
+  };
+  
   const handleSquareClick = (square: string) => {
     if (disabled) return;
     
@@ -85,12 +126,12 @@ export function InteractiveChessBoard({
     if (selectedSquare) {
       // Try to make a move
       if (legalMoves.includes(square)) {
-        const move = { from: selectedSquare, to: square };
-        const success = onMove?.(move) ?? false;
-        
-        if (success) {
-          setSelectedSquare(null);
-          setLegalMoves([]);
+        // Check if this is a promotion
+        if (isPromotion(selectedSquare, square)) {
+          setPendingMove({ from: selectedSquare, to: square });
+          setShowPromotionDialog(true);
+        } else {
+          executeMove(selectedSquare, square);
         }
       } else {
         // Select new piece if clicking on own piece
@@ -145,17 +186,150 @@ export function InteractiveChessBoard({
     if (!draggedSquare || disabled) return;
     
     if (legalMoves.includes(targetSquare)) {
-      const move = { from: draggedSquare, to: targetSquare };
-      onMove?.(move);
+      // Check if this is a promotion
+      if (isPromotion(draggedSquare, targetSquare)) {
+        setPendingMove({ from: draggedSquare, to: targetSquare });
+        setShowPromotionDialog(true);
+        setDraggedSquare(null);
+      } else {
+        const move = { from: draggedSquare, to: targetSquare };
+        onMove?.(move);
+        setDraggedSquare(null);
+        setLegalMoves([]);
+      }
+    } else {
+      setDraggedSquare(null);
+      setLegalMoves([]);
     }
-    
-    setDraggedSquare(null);
-    setLegalMoves([]);
   };
   
   const handleDragEnd = () => {
     setDraggedSquare(null);
     setLegalMoves([]);
+  };
+  
+  // Touch event handlers for mobile
+  const handleTouchStart = (square: string, e: React.TouchEvent) => {
+    if (disabled) return;
+    
+    const piece = board.get(square);
+    if (!piece) return;
+    
+    // Check if this piece belongs to the current player
+    const isWhitePiece = piece === piece.toUpperCase();
+    const isCurrentPlayerPiece = (chess.turn() === 'w' && isWhitePiece) || 
+                                  (chess.turn() === 'b' && !isWhitePiece);
+    
+    // If there's already a selected square and user touches an enemy piece,
+    // don't start a new touch - let handleTouchEnd handle it as a capture
+    if (selectedSquare && !isCurrentPlayerPiece) {
+      return;
+    }
+    
+    e.preventDefault(); // Prevent scrolling when touching pieces
+    
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    touchStartSquare.current = square;
+    isDragging.current = false;
+    
+    // Show legal moves immediately
+    const moves = getLegalMovesForSquare(square);
+    setLegalMoves(moves);
+    
+    // Clear selectedSquare when starting a new touch/drag to avoid conflicts
+    // The touch/drag will use touchStartSquare as the source
+    if (selectedSquare !== square) {
+      setSelectedSquare(null);
+    }
+    
+    console.log('[ui] touch start on', square, 'piece:', piece);
+  };
+  
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (disabled || !touchStartPos.current || !touchStartSquare.current) return;
+    
+    const touch = e.touches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartPos.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartPos.current.y);
+    
+    // If moved beyond tolerance, it's a drag
+    if (deltaX > TOUCH_TOLERANCE || deltaY > TOUCH_TOLERANCE) {
+      isDragging.current = true;
+      setDraggedSquare(touchStartSquare.current);
+      e.preventDefault(); // Prevent scrolling during drag
+    }
+  };
+  
+  const handleTouchEnd = (targetSquare: string, e: React.TouchEvent) => {
+    if (disabled) return;
+    
+    // Handle tap-to-move capture: if there's a selectedSquare, this is a legal move,
+    // AND we're not in drag mode (to avoid conflicts when dragging after selecting)
+    if (selectedSquare && legalMoves.includes(targetSquare) && !isDragging.current && !touchStartSquare.current) {
+      console.log('[ui] tap-to-move capture from', selectedSquare, 'to', targetSquare);
+      // Check if this is a promotion
+      if (isPromotion(selectedSquare, targetSquare)) {
+        setPendingMove({ from: selectedSquare, to: targetSquare });
+        setShowPromotionDialog(true);
+        console.log('[ui] promotion dialog shown (tap-to-move capture)');
+      } else {
+        executeMove(selectedSquare, targetSquare);
+        console.log('[ui] tap-to-move capture executed');
+      }
+      return;
+    }
+    
+    // Handle drag or initial tap
+    if (!touchStartSquare.current) return;
+    
+    const fromSquare = touchStartSquare.current;
+    
+    // If it was a drag, try to make the move
+    if (isDragging.current) {
+      console.log('[ui] drag detected from', fromSquare, 'to', targetSquare);
+      if (legalMoves.includes(targetSquare)) {
+        // Check if this is a promotion
+        if (isPromotion(fromSquare, targetSquare)) {
+          setPendingMove({ from: fromSquare, to: targetSquare });
+          setShowPromotionDialog(true);
+          console.log('[ui] promotion dialog shown');
+        } else {
+          const move = { from: fromSquare, to: targetSquare };
+          onMove?.(move);
+          console.log('[ui] drag move executed:', move);
+        }
+      }
+      
+      setDraggedSquare(null);
+      setLegalMoves([]);
+    } else {
+      // It was a tap - handle like click for tap-to-move
+      console.log('[ui] tap detected on', targetSquare, 'from', fromSquare);
+      if (fromSquare === targetSquare) {
+        // Tapped the same square - select it
+        const moves = getLegalMovesForSquare(fromSquare);
+        setSelectedSquare(fromSquare);
+        setLegalMoves(moves);
+        console.log('[ui] piece selected, legal moves:', moves.length);
+      } else if (legalMoves.includes(targetSquare)) {
+        // Tapped a different legal move square - execute move
+        // Check if this is a promotion
+        if (isPromotion(fromSquare, targetSquare)) {
+          setPendingMove({ from: fromSquare, to: targetSquare });
+          setShowPromotionDialog(true);
+          console.log('[ui] promotion dialog shown (tap-to-move)');
+        } else {
+          executeMove(fromSquare, targetSquare);
+          console.log('[ui] tap-to-move executed');
+        }
+      }
+    }
+    
+    // Reset touch state
+    touchStartPos.current = null;
+    touchStartSquare.current = null;
+    isDragging.current = false;
   };
   
   const isLightSquare = (file: string, rank: string) => {
@@ -201,6 +375,18 @@ export function InteractiveChessBoard({
                     onClick={() => handleSquareClick(square)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(square, e)}
+                    onTouchEnd={(e) => {
+                      // Handle taps on empty squares for tap-to-move
+                      if (!piece && selectedSquare && legalMoves.includes(square)) {
+                        // Check if this is a promotion
+                        if (isPromotion(selectedSquare, square)) {
+                          setPendingMove({ from: selectedSquare, to: square });
+                          setShowPromotionDialog(true);
+                        } else {
+                          executeMove(selectedSquare, square);
+                        }
+                      }
+                    }}
                   >
                     {/* Coordinate labels */}
                     {file === displayFiles[0] && (
@@ -247,6 +433,9 @@ export function InteractiveChessBoard({
                         draggable={!disabled}
                         onDragStart={(e) => handleDragStart(square, e)}
                         onDragEnd={handleDragEnd}
+                        onTouchStart={(e) => handleTouchStart(square, e)}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={(e) => handleTouchEnd(square, e)}
                       >
                         {pieceUnicode[piece]}
                       </div>
@@ -258,6 +447,62 @@ export function InteractiveChessBoard({
           </div>
         </div>
       </div>
+      
+      {/* Promotion Dialog - Large and touch-friendly for mobile */}
+      {showPromotionDialog && (
+        <div 
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          data-testid="promotion-dialog"
+        >
+          <div className="bg-card border-2 border-primary rounded-lg p-6 md:p-8 shadow-2xl max-w-md mx-4">
+            <h3 className="text-xl md:text-2xl font-bold text-center mb-6">
+              Choose Promotion Piece
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => handlePromotionChoice('q')}
+                className="flex flex-col items-center justify-center gap-3 p-6 md:p-8 
+                         bg-background hover-elevate active-elevate-2 rounded-lg border-2 border-border
+                         transition-all min-h-[88px] md:min-h-[100px]"
+                data-testid="button-promote-queen"
+              >
+                <span className="text-6xl md:text-7xl">♕</span>
+                <span className="text-base md:text-lg font-semibold">Queen</span>
+              </button>
+              <button
+                onClick={() => handlePromotionChoice('r')}
+                className="flex flex-col items-center justify-center gap-3 p-6 md:p-8 
+                         bg-background hover-elevate active-elevate-2 rounded-lg border-2 border-border
+                         transition-all min-h-[88px] md:min-h-[100px]"
+                data-testid="button-promote-rook"
+              >
+                <span className="text-6xl md:text-7xl">♖</span>
+                <span className="text-base md:text-lg font-semibold">Rook</span>
+              </button>
+              <button
+                onClick={() => handlePromotionChoice('b')}
+                className="flex flex-col items-center justify-center gap-3 p-6 md:p-8 
+                         bg-background hover-elevate active-elevate-2 rounded-lg border-2 border-border
+                         transition-all min-h-[88px] md:min-h-[100px]"
+                data-testid="button-promote-bishop"
+              >
+                <span className="text-6xl md:text-7xl">♗</span>
+                <span className="text-base md:text-lg font-semibold">Bishop</span>
+              </button>
+              <button
+                onClick={() => handlePromotionChoice('n')}
+                className="flex flex-col items-center justify-center gap-3 p-6 md:p-8 
+                         bg-background hover-elevate active-elevate-2 rounded-lg border-2 border-border
+                         transition-all min-h-[88px] md:min-h-[100px]"
+                data-testid="button-promote-knight"
+              >
+                <span className="text-6xl md:text-7xl">♘</span>
+                <span className="text-base md:text-lg font-semibold">Knight</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
