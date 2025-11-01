@@ -537,6 +537,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Stockfish engine analysis endpoint for Play vs Coach
+  app.post("/api/stockfish/analyze", async (req, res) => {
+    try {
+      const { fen, depth = 15 } = req.body;
+      
+      if (!fen) {
+        return res.status(400).json({ error: "Missing FEN position" });
+      }
+      
+      const evaluation = await getStockfishEvaluation(fen, depth);
+      res.json(evaluation);
+    } catch (error: any) {
+      console.error("Stockfish analysis error:", error);
+      res.status(500).json({ error: error.message || "Failed to analyze position" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

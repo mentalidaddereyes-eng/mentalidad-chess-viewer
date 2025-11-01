@@ -470,7 +470,8 @@ export default function Trainer() {
       chess.reset();
       chess.loadPgn(firstPgn);
       const moves = chess.history();
-      chess.reset();
+      const finalFen = chess.fen();
+      const lastMoveObj = chess.history({ verbose: true }).slice(-1)[0];
       
       const meta = parsePgnMeta(firstPgn);
       
@@ -487,9 +488,9 @@ export default function Trainer() {
         createdAt: new Date(),
       });
       setMoveHistory(moves);
-      setCurrentMove(0);
-      setFen(STARTING_FEN);
-      setLastMove(null);
+      setCurrentMove(moves.length);
+      setFen(finalFen);
+      setLastMove(lastMoveObj ? { from: lastMoveObj.from, to: lastMoveObj.to } : null);
       setCurrentAnalysis(null);
       setIsAnalysisMode(false);
       setPgnDialogOpen(false);
@@ -597,15 +598,31 @@ export default function Trainer() {
           {/* Compact navigation under board */}
           <div className="flex justify-center">
             <MoveControls
-              currentMove={exploratoryMoves.length}
-              totalMoves={exploratoryMoves.length}
+              currentMove={isAnalysisMode ? exploratoryMoves.length : currentMove}
+              totalMoves={isAnalysisMode ? exploratoryMoves.length : moveHistory.length}
               isAutoPlaying={isAutoPlaying}
-              onFirst={() => {}}
-              onPrevious={() => {}}
-              onNext={() => {}}
-              onLast={() => {}}
+              onFirst={() => {
+                if (!isAnalysisMode) goToMove(0);
+              }}
+              onPrevious={() => {
+                if (isAnalysisMode && exploratoryMoves.length > 0) {
+                  analysisModeChess.undo();
+                  setExploratoryMoves(prev => prev.slice(0, -1));
+                  setFen(analysisModeChess.fen());
+                } else if (currentMove > 0) {
+                  goToMove(currentMove - 1);
+                }
+              }}
+              onNext={() => {
+                if (!isAnalysisMode && currentMove < moveHistory.length) {
+                  goToMove(currentMove + 1);
+                }
+              }}
+              onLast={() => {
+                if (!isAnalysisMode) goToMove(moveHistory.length);
+              }}
               onToggleAutoPlay={() => setIsAutoPlaying(!isAutoPlaying)}
-              disabled={isAnalysisMode || isPlayVsCoach}
+              disabled={false}
             />
           </div>
 
