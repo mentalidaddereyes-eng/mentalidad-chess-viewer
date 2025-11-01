@@ -1,0 +1,132 @@
+🔧 PROMPT REPLIT — Fix Pack v4.1 (bugs E2E + UX)
+
+Commit único: fix: v4.1 chess.com+ — PGN sync, counter, play-vs-coach start, a11y, TTS single-channel, mobile dock
+
+🎯 Objetivo
+
+Cerrar todos los bugs reportados:
+
+PGN: tablero no se actualiza / contador “0/0” / navegación bloqueada.
+
+Play vs Coach: al jugar Negras, IA no arranca con Blancas.
+
+Selector de color: difícil de testear (a11y/Playwright).
+
+Scroll: exceso en algunas vistas.
+
+Voz: evitar superposiciones (un solo canal).
+
+1) PGN: sincronización tablero + navegación + contador
+
+Al importar PGN:
+
+Reconstruir moveHistory y setear currentMove = last index (mostrar posición final).
+
+Render del tablero ligado a currentMove (no al “exploratoryMoves”).
+
+Habilitar ⏮ ⏪ ▶ ⏩ ⏭ según currentMove y longitud real.
+
+Contador:
+
+UI debe mostrar full moves (ej.: “3/3” para 1.e4 e5 2.Nf3 Nc6 3.Bb5).
+
+Cálculo: fullMoves = Math.ceil(halfMoves/2).
+
+Ajustar MoveControls para no usar exploratoryMoves.length.
+
+QA: cargar PGN de ejemplo y verificar:
+
+Tablero en última posición al cargar.
+
+Contador en full moves.
+
+Botones de navegación activos.
+
+2) Play vs Coach: arranque correcto + AutoFlip
+
+Si mode = play-vs-coach y userSide = 'b', al iniciar partida:
+
+AutoFlip a negras.
+
+Llamar a /api/stockfish/analyze con FEN inicial (depth por defecto).
+
+Aplicar bestMove de Blancas y explicar (texto + voz si 🎙️ activo).
+
+Manejo de errores:
+
+Timeout 3–5s con retry x1; si falla, mostrar aviso y permitir “Reintentar”.
+
+QA: E2E debe ver primer movimiento de IA como Blancas y actualización de contador/tablero.
+
+3) Selector de color (a11y + testability)
+
+Reemplazar (o envolver) el Select de Radix por <select> nativa para E2E, o exponer fallback accesible.
+
+Añadir data-testid="play-color-select" y opciones con value w/b.
+
+Botón “Play vs Coach” con data-testid="btn-play-vs-coach".
+
+4) Anti-scroll (desktop y móvil)
+
+Regla: tablero + botonera compacta visibles sin scroll en móvil estándar (390×844).
+
+La página puede scrollear si es necesario, pero:
+
+#analysisTab, #movesTab, #pgnBrowser → max-height: 40vh; overflow:auto;
+
+Evitar márgenes/padding grandes bajo el tablero: botonera ≤ 40px alto, gap ≤ 6px, mt ≤ 6px.
+
+Revisar MobileDock: que no tape el tablero ni obligue scroll extra.
+
+5) Voz: canal único + debounce
+
+speak(text):
+
+Si hay audio reproduciéndose, stop antes de iniciar otro.
+
+Debounce 1200ms para ráfagas (múltiples eventos).
+
+Respeta modo Pro/Niño (Leo/Augusto) y idioma activo.
+
+QA: no debe escucharse “eco” ni overlapp.
+
+6) API /api/stockfish/analyze (ya creada)
+
+Mantener validación Zod: fen (required), depth 1–20 (default 15).
+
+Retornar { score, bestMove, depth }.
+
+Manejar mate internamente como cualitativo (sin números) en la explicación.
+
+7) Data-testids para E2E
+
+Añadir:
+
+data-testid="board-canvas", "btn-first", "btn-prev", "btn-play", "btn-next", "btn-last",
+
+"tab-analysis", "tab-moves", "tab-pgnbrowser", "game-select",
+
+"btn-play-vs-coach", "play-color-select", "voice-toggle", "mode-segment-pro-kids".
+
+8) Versionado/Cache
+
+__APP_VERSION__ = "2025-11-01-fixpack-v4.1"
+
+Botón “Actualizar versión” que envíe SKIP_WAITING y recargue al controllerchange.
+
+✅ Criterios de aceptación (no cerrar hasta cumplir)
+
+PGN: al cargar, tablero en última posición, contador full moves, navegación operativa.
+
+Play vs Coach (Negras): IA juega 1ª jugada de Blancas automáticamente + AutoFlip; sin “analyzing forever”.
+
+Selector color: accesible y testeable (Playwright).
+
+Scroll: tablero + controles visibles sin scroll en 390×844; paneles con scroll interno.
+
+Voz: sin superposición, con debounce.
+
+Logs limpias y E2E verdes para los tres flujos: PGN, navegación, Play vs Coach.
+
+Commit único:
+fix: v4.1 chess.com+ — PGN sync, counter, play-vs-coach start, a11y, TTS single-channel, mobile dock

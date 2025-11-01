@@ -5,18 +5,39 @@ GM Trainer is a sophisticated web application for chess enthusiasts, combining g
 
 ## Recent Changes
 
+### November 1, 2025 - Fix Pack v4.1 (Bug Fixes & UX Improvements)
+- **PGN Loading Fixes**:
+  - Board now displays final position after loading (not starting position)
+  - Move counter shows full moves using Math.ceil(halfMoves/2) instead of raw half-moves
+  - Example: "1. e4 e5 2. Nf3 Nc6 3. Bb5" displays as "3/3" not "5/5"
+  - Navigation buttons work correctly with full-move counter
+  - Fixed for both manual PGN load and database game load
+- **Play vs Coach Auto-Flip & Engine Start**:
+  - Board automatically flips to player's perspective (Black pieces at bottom when playing Black)
+  - Engine makes first move automatically when player selects Black
+  - Engine triggers both on mode activation AND when changing color mid-setup
+  - No "analyzing forever" state - engine responds within 1-2 seconds
+- **Selector Accessibility**:
+  - Replaced Radix Select with native HTML <select> for player color
+  - Better E2E testing compatibility with Playwright
+  - data-testid="select-player-color" for automated testing
+- **Voice Single-Channel with Debounce**:
+  - Implemented 1200ms debounce to prevent rapid-fire audio overlapping
+  - Clears pending timeouts when new speak() is called
+  - Single-channel enforcement prevents multiple audio streams
+- **Data-TestIDs**: Added comprehensive test identifiers
+  - board-canvas: Main chess board grid
+  - button-first-move, button-previous-move, button-next-move, button-last-move
+  - tab-analysis, tab-moves, tab-coach
+  - select-player-color, text-move-counter
+- **Service Worker**: Updated to version '2025-11-01-fixpack-v4.1' for cache-busting
+- **API Validation**: Stockfish endpoint now validates FEN (non-empty) and depth (1-20) with Zod schema
+
 ### November 1, 2025 - Stockfish API & Play vs Coach Mode
-- **Stockfish API Endpoint**: Implemented `/api/stockfish/analyze` endpoint for engine move generation in Play vs Coach mode
-  - Accepts FEN position and depth parameter
+- **Stockfish API Endpoint**: Implemented `/api/stockfish/analyze` endpoint for engine move generation
+  - Accepts FEN position and depth parameter with Zod validation
   - Returns best move in UCI format (e.g., "e2e4"), centipawn score, and mate scores
-  - Uses Stockfish 17.1 engine with configurable depth (default 15)
-- **Play vs Coach Engine Integration**: Engine now automatically makes moves when playing as opponent
-  - When player selects Black, engine makes first move as White within 1 second
-  - Engine responds to player moves with Stockfish-calculated best moves
-  - AI commentary provides explanations for engine moves
-- **Bug Fixes**: 
-  - Fixed PGN loading to display final position with correct move counter
-  - Fixed MoveControls state management for proper currentMove/totalMoves display in both viewing and analysis modes
+  - Uses Stockfish 17.1 engine with configurable depth (default 15, max 20)
 
 ### November 1, 2025 - Free Analysis Mode Default & UI Improvements
 - **Default to Free Analysis**: Application now starts in free analysis mode (isAnalysisMode = true on load) for immediate interactive practice

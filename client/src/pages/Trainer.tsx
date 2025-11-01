@@ -105,6 +105,7 @@ export default function Trainer() {
   // Play vs Coach mode
   const [isPlayVsCoach, setIsPlayVsCoach] = useState(false);
   const [playerColor, setPlayerColor] = useState<"white" | "black">("white");
+  const [boardOrientation, setBoardOrientation] = useState<"white" | "black">("white");
   const [isEngineThinking, setIsEngineThinking] = useState(false);
   
   // Dialogs
@@ -240,13 +241,15 @@ export default function Trainer() {
       const firstPgn = games[0];
       chess.loadPgn(firstPgn);
       const moves = chess.history();
+      const finalFen = chess.fen();
+      const lastMoveObj = chess.history({ verbose: true }).slice(-1)[0];
       chess.reset();
       
       setGame(loadedGame);
       setMoveHistory(moves);
-      setCurrentMove(0);
-      setFen(STARTING_FEN);
-      setLastMove(null);
+      setCurrentMove(moves.length);
+      setFen(finalFen);
+      setLastMove(lastMoveObj ? { from: lastMoveObj.from, to: lastMoveObj.to } : null);
       setCurrentAnalysis(null);
       setIsAnalysisMode(false); // Switch to game view mode
     }
@@ -523,6 +526,9 @@ export default function Trainer() {
       setIsAnalysisMode(true);
       setIsPlayVsCoach(true);
       
+      // Auto-flip board to player's color
+      setBoardOrientation(playerColor);
+      
       // If player is black, engine makes first move
       if (playerColor === "black") {
         setTimeout(() => makeEngineMove(), 1000);
@@ -578,7 +584,18 @@ export default function Trainer() {
             onExportPgn={() => {}}
             onSettings={() => setLocation("/settings")}
             onTogglePlayVsCoach={handleTogglePlayVsCoach}
-            onPlayerColorChange={(color) => setPlayerColor(color)}
+            onPlayerColorChange={(color) => {
+              setPlayerColor(color);
+              // Update board orientation when player color changes
+              if (isPlayVsCoach) {
+                setBoardOrientation(color);
+                
+                // If changing to Black and game hasn't started, engine should make first move
+                if (color === "black" && exploratoryMoves.length === 0) {
+                  setTimeout(() => makeEngineMove(), 1000);
+                }
+              }
+            }}
           />
         </div>
 
@@ -587,6 +604,7 @@ export default function Trainer() {
           <div className="chess-board-wrapper">
             <InteractiveChessBoard
               fen={fen}
+              orientation={boardOrientation}
               onMove={handleMove}
               showLegalMoves={true}
               disabled={isEngineThinking}
@@ -598,8 +616,8 @@ export default function Trainer() {
           {/* Compact navigation under board */}
           <div className="flex justify-center">
             <MoveControls
-              currentMove={isAnalysisMode ? exploratoryMoves.length : currentMove}
-              totalMoves={isAnalysisMode ? exploratoryMoves.length : moveHistory.length}
+              currentMove={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) : Math.ceil(currentMove / 2)}
+              totalMoves={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) : Math.ceil(moveHistory.length / 2)}
               isAutoPlaying={isAutoPlaying}
               onFirst={() => {
                 if (!isAnalysisMode) goToMove(0);

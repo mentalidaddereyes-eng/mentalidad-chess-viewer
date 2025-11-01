@@ -344,7 +344,7 @@ export function InteractiveChessBoard({
       <div className="relative w-full" style={{ paddingBottom: "100%" }}>
         <div className="absolute inset-0 rounded-md overflow-hidden border border-border shadow-lg">
           {/* Chess squares */}
-          <div className="grid grid-cols-8 grid-rows-8 w-full h-full">
+          <div className="grid grid-cols-8 grid-rows-8 w-full h-full" data-testid="board-canvas">
             {displayRanks.map((rank) =>
               displayFiles.map((file) => {
                 const square = `${file}${rank}`;

@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ActionPanelProps {
   isPlayVsCoach: boolean;
@@ -144,16 +143,17 @@ export function ActionPanel({
       {/* Color selector when playing vs coach */}
       {isPlayVsCoach && (
         <div className="flex flex-col gap-2 p-2 bg-muted/30 rounded-md">
-          <Label className="text-xs">I play with:</Label>
-          <Select value={playerColor} onValueChange={onPlayerColorChange}>
-            <SelectTrigger className="h-8 text-xs" data-testid="select-player-color">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="white">White</SelectItem>
-              <SelectItem value="black">Black</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label htmlFor="player-color-select" className="text-xs">I play with:</Label>
+          <select
+            id="player-color-select"
+            value={playerColor}
+            onChange={(e) => onPlayerColorChange(e.target.value as "white" | "black")}
+            className="h-8 text-xs px-2 rounded-md border border-input bg-background hover-elevate"
+            data-testid="select-player-color"
+          >
+            <option value="white">White</option>
+            <option value="black">Black</option>
+          </select>
         </div>
       )}
 

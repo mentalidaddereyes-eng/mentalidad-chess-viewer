@@ -14,6 +14,7 @@ export function useVoice() {
   const [voiceMode, setVoiceMode] = useState<VoiceMode>('pro');
   const [muted, setMuted] = useState(true); // Default: muted
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -54,7 +55,7 @@ export function useVoice() {
     }
   }, []);
 
-  // Speak function - only plays if not muted
+  // Speak function - only plays if not muted, with 1200ms debounce
   const speak = useCallback((audioUrl: string | undefined) => {
     console.log('[voice] speak called, muted:', muted, 'audioUrl:', !!audioUrl);
     
@@ -68,34 +69,45 @@ export function useVoice() {
       return;
     }
 
-    // Stop any currently playing audio (single-channel enforcement)
-    stopAudio();
-
-    try {
-      const audio = new Audio(audioUrl);
-      currentAudio = audio;
-      audioRef.current = audio;
-      
-      audio.onended = () => {
-        currentAudio = null;
-        audioRef.current = null;
-        console.log('[voice] playback finished');
-      };
-
-      audio.onerror = (error) => {
-        console.error('[voice] playback error:', error);
-        currentAudio = null;
-        audioRef.current = null;
-      };
-
-      audio.play().then(() => {
-        console.log('[voice] playing audio, mode:', voiceMode);
-      }).catch((error) => {
-        console.error('[voice] failed to play audio:', error);
-      });
-    } catch (error) {
-      console.error('[voice] failed to create audio:', error);
+    // Clear any pending debounced calls
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      console.log('[voice] debounce cleared (preventing rapid-fire)');
     }
+
+    // Debounce: wait 1200ms before playing (prevents overlapping from rapid events)
+    debounceTimerRef.current = setTimeout(() => {
+      // Stop any currently playing audio (single-channel enforcement)
+      stopAudio();
+
+      try {
+        const audio = new Audio(audioUrl);
+        currentAudio = audio;
+        audioRef.current = audio;
+        
+        audio.onended = () => {
+          currentAudio = null;
+          audioRef.current = null;
+          console.log('[voice] playback finished');
+        };
+
+        audio.onerror = (error) => {
+          console.error('[voice] playback error:', error);
+          currentAudio = null;
+          audioRef.current = null;
+        };
+
+        audio.play().then(() => {
+          console.log('[voice] playing audio, mode:', voiceMode);
+        }).catch((error) => {
+          console.error('[voice] failed to play audio:', error);
+        });
+      } catch (error) {
+        console.error('[voice] failed to create audio:', error);
+      }
+      
+      debounceTimerRef.current = null;
+    }, 1200);
   }, [muted, voiceMode, stopAudio]);
 
   // Change voice mode (stop current audio if playing)
