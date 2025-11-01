@@ -32,6 +32,7 @@ The application features a modern dark mode design using Tailwind CSS and Shadcn
 - **Unified Import**: A single "Import" button automatically detects PGN or FEN input.
 - **Puzzles Auto-Features**: Auto-seeds sample puzzles, auto-advances to the next puzzle, and persists difficulty filters.
 - **AI Coach Intelligence**: `getGPTComment()` function provides pedagogical, motivational commentary focusing on ideas and concepts, integrated with Stockfish, GPT-5, and ElevenLabs.
+- **Cost Saver Pack v6.0 (November 2025)**: Dual-tier pricing system with Pro/Free plans, plan detection via query param → cookie → localStorage, visual PlanBanner component, multi-provider TTS (ElevenLabs for Pro, gTTS for Free), GPT hash-based memoization with TTL 180-300s, rate-limiting (max 2 GPT calls/min, burst 1/3s), trivial position detection, 200-char response truncation, and TTS cache with automatic fallback.
 
 ### External Dependencies
 - **OpenAI API**: For GPT-5 AI analysis and coaching.
