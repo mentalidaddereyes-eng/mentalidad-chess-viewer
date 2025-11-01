@@ -201,13 +201,13 @@ export default function Settings() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="english">English</SelectItem>
-                  <SelectItem value="spanish">Spanish (Español)</SelectItem>
-                  <SelectItem value="portuguese">Portuguese (Português)</SelectItem>
-                  <SelectItem value="hindi">Hindi (हिन्दी)</SelectItem>
-                  <SelectItem value="french">French (Français)</SelectItem>
-                  <SelectItem value="german">German (Deutsch)</SelectItem>
-                  <SelectItem value="russian">Russian (Русский)</SelectItem>
+                  <SelectItem value="english" data-testid="lang-en">English</SelectItem>
+                  <SelectItem value="spanish" data-testid="lang-es">Spanish (Español)</SelectItem>
+                  <SelectItem value="portuguese" data-testid="lang-pt">Portuguese (Português)</SelectItem>
+                  <SelectItem value="hindi" data-testid="lang-hi">Hindi (हिन्दी)</SelectItem>
+                  <SelectItem value="french" data-testid="lang-fr">French (Français)</SelectItem>
+                  <SelectItem value="german" data-testid="lang-de">German (Deutsch)</SelectItem>
+                  <SelectItem value="russian" data-testid="lang-ru">Russian (Русский)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

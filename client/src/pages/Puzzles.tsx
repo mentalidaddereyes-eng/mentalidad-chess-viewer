@@ -36,10 +36,29 @@ export default function Puzzles() {
   const [attemptStatus, setAttemptStatus] = useState<"idle" | "correct" | "incorrect">("idle");
   const startTimeRef = useRef<number>(Date.now());
   
-  // Filter state
+  // Filter state - Hotfix v5.1.1: Persist difficulty in localStorage
   const [showFilters, setShowFilters] = useState(false);
-  const [ratingRange, setRatingRange] = useState<[number, number]>([600, 1400]);
+  const getInitialRatingRange = (): [number, number] => {
+    const stored = localStorage.getItem('puzzleDifficulty');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length === 2) {
+          return [parsed[0], parsed[1]];
+        }
+      } catch {
+        // Fall through to default
+      }
+    }
+    return [600, 1400];
+  };
+  const [ratingRange, setRatingRange] = useState<[number, number]>(getInitialRatingRange());
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  
+  // Hotfix v5.1.1: Persist difficulty when it changes
+  useEffect(() => {
+    localStorage.setItem('puzzleDifficulty', JSON.stringify(ratingRange));
+  }, [ratingRange]);
 
   // Build query string for filters
   const buildQueryString = () => {
@@ -62,7 +81,7 @@ export default function Puzzles() {
     },
   });
 
-  // Seed puzzles mutation
+  // Seed puzzles mutation - Hotfix v5.1.1: Auto-seed
   const seedPuzzlesMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/puzzles/seed", {});
@@ -70,10 +89,6 @@ export default function Puzzles() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/puzzles"] });
-      toast({
-        title: "Puzzles Seeded",
-        description: "Sample puzzles have been added to the database",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -83,6 +98,14 @@ export default function Puzzles() {
       });
     },
   });
+  
+  // Hotfix v5.1.1: Auto-seed puzzles if DB is empty
+  useEffect(() => {
+    if (!isLoading && puzzles && puzzles.length === 0 && !seedPuzzlesMutation.isPending) {
+      console.log('[puzzles] DB empty, auto-seeding...');
+      seedPuzzlesMutation.mutate();
+    }
+  }, [isLoading, puzzles]);
 
   // Record puzzle attempt mutation
   const recordAttemptMutation = useMutation({
@@ -177,6 +200,12 @@ export default function Puzzles() {
             title: "¡Correcto!",
             description: `Has resuelto el puzzle en ${timeSpent} segundos`,
           });
+          
+          // Hotfix v5.1.1: Auto-load next puzzle after 400ms
+          setTimeout(() => {
+            loadNextPuzzle();
+          }, 400);
+          
           return true;
         } else {
           // Calculate time spent
@@ -202,6 +231,12 @@ export default function Puzzles() {
             description: `Intentaste ${moveNotation}, pero la solución es diferente`,
             variant: "destructive",
           });
+          
+          // Hotfix v5.1.1: Auto-load next puzzle after 400ms (even on failure)
+          setTimeout(() => {
+            loadNextPuzzle();
+          }, 1400); // 1000ms to see move + 400ms delay
+          
           return false;
         }
       }
@@ -280,12 +315,17 @@ export default function Puzzles() {
     );
   }
 
-  const nextPuzzle = () => {
+  // Hotfix v5.1.1: Unified loadNextPuzzle function for auto-progression
+  const loadNextPuzzle = () => {
     if (!puzzles) return;
     const nextIndex = (currentPuzzleIndex + 1) % puzzles.length;
     setCurrentPuzzleIndex(nextIndex);
     setShowSolution(false);
     setAttemptStatus("idle");
+  };
+
+  const nextPuzzle = () => {
+    loadNextPuzzle();
   };
 
   const previousPuzzle = () => {
