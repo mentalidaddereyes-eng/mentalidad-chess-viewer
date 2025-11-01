@@ -11,9 +11,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Game, MoveAnalysis } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Trophy, History, Target, Settings } from "lucide-react";
+import { Trophy, History, Target, Settings, Volume2, VolumeX } from "lucide-react";
 import { Link, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useVoice } from "@/hooks/use-voice";
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -37,6 +38,7 @@ function getUserSettings() {
 
 export default function Trainer() {
   const { toast } = useToast();
+  const { voiceMode, muted, toggleMute, speak } = useVoice();
   const searchString = useSearch();
   const searchParams = new URLSearchParams(searchString);
   const gameIdParam = searchParams.get("gameId");
@@ -94,19 +96,22 @@ export default function Trainer() {
   const analyzeMoveMutation = useMutation({
     mutationFn: async (moveData: { moveNumber: number; move: string; fen: string }) => {
       const settings = getUserSettings();
-      const res = await apiRequest("POST", "/api/analysis/move", { ...moveData, settings });
+      const res = await apiRequest("POST", "/api/analysis/move", { 
+        ...moveData, 
+        settings,
+        voiceMode,
+        muted,
+      });
       return await res.json();
     },
     onSuccess: (data: MoveAnalysis & { audioUrl?: string }) => {
       setCurrentAnalysis(data);
       
-      // Play audio if available
-      if (data.audioUrl) {
+      // Use voice hook to play audio (single-channel enforcement)
+      speak(data.audioUrl);
+      if (data.audioUrl && !muted) {
         setIsSpeaking(true);
-        const audio = new Audio(data.audioUrl);
-        audio.onended = () => setIsSpeaking(false);
-        audio.onerror = () => setIsSpeaking(false);
-        audio.play().catch(() => setIsSpeaking(false));
+        setTimeout(() => setIsSpeaking(false), 3000); // Approximate speaking time
       }
     },
   });
@@ -123,23 +128,24 @@ export default function Trainer() {
           moveHistory,
         },
         settings,
+        voiceMode,
+        muted,
       });
       return await res.json();
     },
     onSuccess: (data: { answer: string; audioUrl?: string }) => {
       setLastQuestion(data.answer);
       
-      if (data.audioUrl) {
+      // Use voice hook to play audio (single-channel enforcement)
+      speak(data.audioUrl);
+      if (data.audioUrl && !muted) {
         setIsSpeaking(true);
-        const audio = new Audio(data.audioUrl);
-        audio.onended = () => setIsSpeaking(false);
-        audio.onerror = () => setIsSpeaking(false);
-        audio.play().catch(() => setIsSpeaking(false));
+        setTimeout(() => setIsSpeaking(false), 3000); // Approximate speaking time
       }
       
       toast({
         title: "Coach Responded",
-        description: "Playing answer...",
+        description: muted ? "Response received" : "Playing answer...",
       });
     },
     onError: () => {
@@ -233,6 +239,17 @@ export default function Trainer() {
             </div>
             
             <div className="flex items-center gap-4">
+              {/* Voice Mute Toggle - Quick Access */}
+              <Button
+                variant={muted ? "outline" : "default"}
+                size="icon"
+                onClick={toggleMute}
+                data-testid="button-toggle-mute-quick"
+                title={muted ? "Unmute voice coach" : "Mute voice coach"}
+              >
+                {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </Button>
+              
               <Link href="/history">
                 <Button variant="outline" data-testid="button-view-history">
                   <History className="w-4 h-4 mr-2" />

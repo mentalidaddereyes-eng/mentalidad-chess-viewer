@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Settings as SettingsIcon, Save } from "lucide-react";
+import { Settings as SettingsIcon, Save, Volume2, VolumeX } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
@@ -17,9 +17,12 @@ import { Slider } from "@/components/ui/slider";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { UserSettings } from "@shared/schema";
+import { useVoice } from "@/hooks/use-voice";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 export default function Settings() {
   const { toast } = useToast();
+  const { voiceMode, muted, selectVoice, toggleMute } = useVoice();
   const [coachingStyle, setCoachingStyle] = useState("balanced");
   const [difficulty, setDifficulty] = useState(50);
   const [verbosity, setVerbosity] = useState(50);
@@ -204,6 +207,71 @@ export default function Settings() {
                   <SelectItem value="russian">Russian (Русский)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </Card>
+
+          {/* Voice Settings */}
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Voice Settings</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Configure your AI coach voice and audio preferences
+            </p>
+            
+            <div className="space-y-6">
+              {/* Mute Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-md border bg-card">
+                <div className="flex items-center gap-3">
+                  {muted ? (
+                    <VolumeX className="h-5 w-5 text-muted-foreground" />
+                  ) : (
+                    <Volume2 className="h-5 w-5 text-primary" />
+                  )}
+                  <div>
+                    <Label className="text-base font-medium">Voice Coach</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {muted ? "Audio is muted" : "Audio is active"}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant={muted ? "outline" : "default"}
+                  size="lg"
+                  onClick={toggleMute}
+                  data-testid="button-toggle-mute"
+                >
+                  {muted ? "Unmute" : "Mute"}
+                </Button>
+              </div>
+
+              {/* Voice Mode Selection */}
+              <div>
+                <Label className="text-base mb-3 block">Voice Personality</Label>
+                <RadioGroup 
+                  value={voiceMode} 
+                  onValueChange={(value: 'pro' | 'kids') => selectVoice(value)}
+                  className="space-y-3"
+                >
+                  <div className="flex items-center space-x-3 p-4 rounded-md border hover-elevate" data-testid="radio-voice-pro">
+                    <RadioGroupItem value="pro" id="voice-pro" />
+                    <Label htmlFor="voice-pro" className="flex-1 cursor-pointer">
+                      <div className="font-medium">Leo (Professional)</div>
+                      <p className="text-xs text-muted-foreground">
+                        Mature, authoritative coaching voice for advanced players
+                      </p>
+                    </Label>
+                  </div>
+                  
+                  <div className="flex items-center space-x-3 p-4 rounded-md border hover-elevate" data-testid="radio-voice-kids">
+                    <RadioGroupItem value="kids" id="voice-kids" />
+                    <Label htmlFor="voice-kids" className="flex-1 cursor-pointer">
+                      <div className="font-medium">Augusto (Kids)</div>
+                      <p className="text-xs text-muted-foreground">
+                        Friendly, encouraging voice for young learners
+                      </p>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
             </div>
           </Card>
 

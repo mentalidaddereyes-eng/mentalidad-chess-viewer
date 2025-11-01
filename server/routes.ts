@@ -79,7 +79,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analyze a specific move
   app.post("/api/analysis/move", async (req, res) => {
     try {
-      const { moveNumber, move, fen, settings } = req.body;
+      const { moveNumber, move, fen, settings, voiceMode, muted } = req.body;
       
       if (!moveNumber || !move || !fen) {
         return res.status(400).json({ error: "Missing required fields" });
@@ -103,18 +103,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Continue without engine evaluation
       }
       
-      // Generate audio for the analysis
+      // Generate audio for the analysis (only if not muted)
       let audioUrl;
-      try {
-        const audioBuffer = await textToSpeech(analysis.analysis);
-        
-        // In a production app, you'd save this to object storage
-        // For now, we'll convert to base64 data URL
-        const base64Audio = audioBuffer.toString('base64');
-        audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
-      } catch (audioError) {
-        console.error("Audio generation error:", audioError);
-        // Continue without audio if it fails
+      if (!muted) {
+        try {
+          const audioBuffer = await textToSpeech(analysis.analysis, voiceMode || 'pro');
+          
+          // In a production app, you'd save this to object storage
+          // For now, we'll convert to base64 data URL
+          const base64Audio = audioBuffer.toString('base64');
+          audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
+        } catch (audioError) {
+          console.error("Audio generation error:", audioError);
+          // Continue without audio if it fails
+        }
       }
 
       res.json({
@@ -136,7 +138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Answer a voice question
   app.post("/api/voice/ask", async (req, res) => {
     try {
-      const { question, context, settings } = req.body;
+      const { question, context, settings, voiceMode, muted } = req.body;
       
       if (!question || !context) {
         return res.status(400).json({ error: "Missing question or context" });
@@ -145,14 +147,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get AI answer
       const answer = await answerQuestion(question, context, settings);
       
-      // Generate audio for the answer
+      // Generate audio for the answer (only if not muted)
       let audioUrl;
-      try {
-        const audioBuffer = await textToSpeech(answer);
-        const base64Audio = audioBuffer.toString('base64');
-        audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
-      } catch (audioError) {
-        console.error("Audio generation error:", audioError);
+      if (!muted) {
+        try {
+          const audioBuffer = await textToSpeech(answer, voiceMode || 'pro');
+          const base64Audio = audioBuffer.toString('base64');
+          audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
+        } catch (audioError) {
+          console.error("Audio generation error:", audioError);
+        }
       }
 
       res.json({

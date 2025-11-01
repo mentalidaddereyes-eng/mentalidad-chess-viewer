@@ -6,14 +6,36 @@ const elevenlabs = new ElevenLabsClient({
   apiKey: process.env.ELEVENLABS_API_KEY,
 });
 
-// You can find voice IDs in your ElevenLabs account
-// Using a default voice for now - user can configure their cloned voice later
-const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel voice
+// Voice IDs from environment variables (secure)
+const VOICE_PRO = process.env.ELEVENLABS_VOICE_PRO; // Leo voice for professional mode
+const VOICE_KIDS = process.env.ELEVENLABS_VOICE_KIDS; // Augusto voice for kids mode
+const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel voice fallback
 
-export async function textToSpeech(text: string, voiceId?: string): Promise<Buffer> {
+export type VoiceMode = 'pro' | 'kids';
+
+console.log('[voice] init ok (muted)');
+console.log('[voice] VOICE_PRO available:', !!VOICE_PRO);
+console.log('[voice] VOICE_KIDS available:', !!VOICE_KIDS);
+
+export async function textToSpeech(text: string, voiceMode: VoiceMode = 'pro'): Promise<Buffer> {
   try {
+    // Select voice based on mode
+    let voiceId: string;
+    if (voiceMode === 'pro' && VOICE_PRO) {
+      voiceId = VOICE_PRO;
+      console.log('[voice] mode: pro (Leo)');
+    } else if (voiceMode === 'kids' && VOICE_KIDS) {
+      voiceId = VOICE_KIDS;
+      console.log('[voice] mode: kids (Augusto)');
+    } else {
+      voiceId = DEFAULT_VOICE_ID;
+      console.log('[voice] fallback to default voice');
+    }
+
+    console.log('[voice] elevenlabs used, single-channel enforced');
+
     const audio = await elevenlabs.generate({
-      voice: voiceId || DEFAULT_VOICE_ID,
+      voice: voiceId,
       text: text,
       model_id: "eleven_monolingual_v1",
     });
@@ -26,7 +48,7 @@ export async function textToSpeech(text: string, voiceId?: string): Promise<Buff
     
     return Buffer.concat(chunks);
   } catch (error) {
-    console.error("ElevenLabs TTS error:", error);
+    console.error("[voice] ElevenLabs TTS error:", error);
     throw new Error("Failed to generate speech");
   }
 }
