@@ -33,6 +33,7 @@ The application features a modern dark mode design using Tailwind CSS and Shadcn
 - **Puzzles Auto-Features**: Auto-seeds sample puzzles, auto-advances to the next puzzle, and persists difficulty filters.
 - **AI Coach Intelligence**: `getGPTComment()` function provides pedagogical, motivational commentary focusing on ideas and concepts, integrated with Stockfish, GPT-5, and ElevenLabs.
 - **Cost Saver Pack v6.0 (November 2025)**: Dual-tier pricing system with Pro/Free plans, plan detection via query param → cookie → localStorage, visual PlanBanner component, multi-provider TTS (ElevenLabs for Pro, gTTS for Free), GPT hash-based memoization with TTL 180-300s, rate-limiting (max 2 GPT calls/min, burst 1/3s), trivial position detection, 200-char response truncation, and TTS cache with automatic fallback.
+- **HOTFIX v6.1 (Partial - November 2025)**: DB Resilience with LocalStore fallback (JSON persistence to /tmp with Date serialization fix), ENV-based voice provider selection with intelligent fallback to gTTS when ElevenLabs API keys missing, Spanish language defaults across LocalStore/routes/elevenlabs. Play vs Coach already functional with auto-flip and engine-first-move for Black. Features descoped (TTS async queue, file .pgn import, Puzzles LocalStore, Service Worker v6.1) require additional implementation.
 
 ### External Dependencies
 - **OpenAI API**: For GPT-5 AI analysis and coaching.
