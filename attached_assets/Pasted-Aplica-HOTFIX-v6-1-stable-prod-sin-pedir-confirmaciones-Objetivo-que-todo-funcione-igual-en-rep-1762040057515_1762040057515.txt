@@ -1,0 +1,45 @@
+Aplica HOTFIX v6.1 “stable-prod” sin pedir confirmaciones. Objetivo: que todo funcione igual en .replit.dev y prod.repl.run, sin 500 y con voz ES real.
+
+1) DB & Settings (sin 500):
+- En server/lib/db.ts crea getStore(): si falla la DB (fetch/timeout), usa LocalStore (archivo JSON en /tmp + mirror en localStorage). No lances 500; responde 200 y persiste local.
+- En /api/settings GET/POST usa getStore() y maneja fallback automático. Log: [settings] provider=<db|local>.
+
+2) ENV de voz por idioma (Pro) + fallback Free:
+- Lee ELEVENLABS_API_KEY y VOICE_IDs por idioma: ELEVENLABS_VOICE_PRO_ES, _EN, _PT, _HI (si faltan, usa una por defecto global ELEVENLABS_VOICE_PRO).
+- Si falta API key o voice → fallback a Free provider (gTTS/Piper) sin romper. Log claro: [voice] provider=pro|free reason=<missing_key|missing_voice|ok>.
+- Respeta settings.language SIEMPRE (no inglés por defecto). Borra cualquier default en-US hardcodeado.
+
+3) Latencia de voz:
+- TTS asíncrono con cola única y cancelación: si llega nueva frase, cancela la anterior y reproduce la última (no “se acumulan”).
+- Cache LRU 200MB por (text|lang|mode). Log: [tts] cache HIT/MISS.
+- Debounce speak=600ms; GPT debounce=400ms. No llamas GPT si FEN no cambió.
+
+4) Play vs Coach:
+- Al elegir Negras, engine mueve primero en <1000ms. Asegura call makeEngineMove() al activar el modo o al cambiar color. AutoFlip ON. Añade data-testid: select-player-color, btn-start-coach.
+
+5) Import unificado (PGN/FEN + archivo):
+- En el modal “Import” agrega <input type="file" accept=".pgn,.txt">.
+- Detecta automático: si hay archivo .pgn → parseMultiPGN(); renderiza pestaña “Games” (White–Black · Result · ECO · Date); click ⇒ salta a última jugada. Si textarea contiene FEN ⇒ carga posición.
+- Toasts: “Game Loaded (PGN)” / “Position Loaded (FEN)”.
+- Data-testids: input-file-pgn, tab-games, game-row-<idx>.
+
+6) Puzzles:
+- Si DB falla, seed en localStore sin 500. Auto-next 400ms al resolver/fallar; persist difficulty; sin parpadeos.
+
+7) UI idioma:
+- Idioma por defecto: Español. El cambio de idioma actualiza inmediatamente la voz (corta audio en curso y reprocesa en el nuevo lang). Elimina “Analyzing…”; usa getGPTComment() o plantillas locales SIN números.
+
+8) Cost Saver:
+- Mantén rate limit GPT (máx 2/min) y memo por (FEN|lang|mode|bestSan).
+- Logs discretos en consola para validar ahorro: [memo] HIT, [rate] throttled.
+
+9) Build/Service Worker:
+- Bump SW version a v6.1-stable; limpia caches obsoletas.
+
+10) QA rápido (imprescindible, imprime al final):
+- [OK] settings saved provider=<db|local>
+- [OK] voice lang=<es> provider=<pro|free>
+- [OK] import file .pgn -> gamesCount=<n>
+- [OK] play vs coach (black starts) autoFlip=on
+- [OK] puzzles autoNext=on (provider=<db|local>)
+- Commit único: feat: v6.1 stable-prod (DB fallback, voice i18n real, file import .pgn, coach start fix, low-latency TTS, puzzles local fallback)

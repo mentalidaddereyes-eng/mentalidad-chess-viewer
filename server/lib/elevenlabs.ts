@@ -51,12 +51,17 @@ const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel voice fallback
 
 console.log('[voice] Hotfix v5.1.1 - Multilingual voice system initialized');
 
-// Hotfix v5.1.1: Multilingual TTS with LRU cache (200MB budget)
+// Hotfix v5.1.1 + v6.1: Multilingual TTS with LRU cache (200MB budget) + ENV fallback
 export async function textToSpeech(
   text: string, 
   voiceMode: VoiceMode = 'pro',
-  language: Language = 'spanish' // Default to Spanish per hotfix v5.1.1
+  language: Language = 'spanish' // HOTFIX v6.1: Spanish default
 ): Promise<Buffer> {
+  // HOTFIX v6.1: Verify API key exists
+  if (!process.env.ELEVENLABS_API_KEY) {
+    throw new Error('ELEVENLABS_API_KEY not configured');
+  }
+  
   // Check cache first (low-cost optimization) - Cost Saver Pack v6.0: includes provider
   const cacheKey = getTTSCacheKey(text, voiceMode, language, 'elevenlabs');
   const cached = ttsCache.get(cacheKey);
@@ -66,10 +71,14 @@ export async function textToSpeech(
   }
 
   try {
-    // Select voice based on language + mode (Hotfix v5.1.1)
+    // Select voice based on language + mode (HOTFIX v6.1: with ENV fallback)
     const voiceId = VOICE_MAP[language]?.[voiceMode] || DEFAULT_VOICE_ID;
     
-    console.log(`[voice] ${language}/${voiceMode} -> ${voiceId}, ElevenLabs API call`);
+    if (!voiceId) {
+      throw new Error(`No voice ID configured for ${language}/${voiceMode}`);
+    }
+    
+    console.log(`[voice] lang=${language} provider=pro voiceId=${voiceId}`);
 
     const audio = await elevenlabs.generate({
       voice: voiceId,

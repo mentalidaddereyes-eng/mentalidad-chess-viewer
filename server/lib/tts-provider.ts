@@ -78,8 +78,24 @@ export async function generateSpeech(
 }
 
 /**
- * Get available TTS provider based on plan mode
+ * HOTFIX v6.1: Get available TTS provider with intelligent fallback
+ * - Pro plan: Try ElevenLabs if API key exists, else fallback to gTTS
+ * - Free plan: Always use gTTS
  */
 export function getTTSProvider(planMode: 'pro' | 'free'): VoiceProvider {
-  return planMode === 'pro' ? 'elevenlabs' : 'gtts';
+  if (planMode === 'free') {
+    console.log('[voice] provider=free reason=free_plan');
+    return 'gtts';
+  }
+  
+  // Pro plan: Check if ElevenLabs API key exists
+  const hasApiKey = !!process.env.ELEVENLABS_API_KEY;
+  
+  if (!hasApiKey) {
+    console.log('[voice] provider=free reason=missing_elevenlabs_key (fallback from pro)');
+    return 'gtts';
+  }
+  
+  console.log('[voice] provider=pro reason=ok');
+  return 'elevenlabs';
 }

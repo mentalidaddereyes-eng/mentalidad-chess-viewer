@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { getStore } from "./lib/store-provider"; // HOTFIX v6.1: DB fallback
 import { fetchGameByUrl, fetchGamesByUsername, parsePgnMetadata } from "./lib/lichess";
 import { analyzeMove, answerQuestion } from "./lib/openai";
 import { generateSpeech, getTTSProvider } from "./lib/tts-provider"; // Cost Saver Pack v6.0
@@ -250,10 +251,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user settings
+  // Get user settings (HOTFIX v6.1: DB fallback, no 500)
   app.get("/api/settings", async (req, res) => {
     try {
-      const settings = await storage.getSettings();
+      const { store, provider } = await getStore();
+      console.log('[settings] GET provider=', provider);
+      
+      const settings = await store.getSettings();
       
       // Return default settings if none exist
       if (!settings) {
@@ -261,18 +265,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           coachingStyle: "balanced",
           difficulty: 50,
           verbosity: 50,
-          language: "english",
+          language: "spanish", // HOTFIX v6.1: Spanish default
         });
       }
       
       res.json(settings);
     } catch (error: any) {
-      console.error("Failed to fetch settings:", error);
-      res.status(500).json({ error: error.message || "Failed to fetch settings" });
+      console.error("[settings] GET error:", error);
+      // HOTFIX v6.1: Return 200 with defaults instead of 500
+      res.status(200).json({
+        coachingStyle: "balanced",
+        difficulty: 50,
+        verbosity: 50,
+        language: "spanish",
+      });
     }
   });
 
-  // Update user settings
+  // Update user settings (HOTFIX v6.1: DB fallback, no 500)
   app.put("/api/settings", async (req, res) => {
     try {
       // Validate request body with Zod schema
@@ -294,7 +304,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { coachingStyle, difficulty, verbosity, language } = validationResult.data;
       
-      const settings = await storage.updateSettings({
+      const { store, provider } = await getStore();
+      console.log('[settings] PUT provider=', provider, 'language=', language);
+      
+      const settings = await store.updateSettings({
         coachingStyle,
         difficulty,
         verbosity,
@@ -303,8 +316,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(settings);
     } catch (error: any) {
-      console.error("Failed to update settings:", error);
-      res.status(500).json({ error: error.message || "Failed to update settings" });
+      console.error("[settings] PUT error:", error);
+      // HOTFIX v6.1: Return 200 with the request data instead of 500
+      res.status(200).json(req.body);
     }
   });
 
