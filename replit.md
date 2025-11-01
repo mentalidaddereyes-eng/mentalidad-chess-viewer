@@ -13,7 +13,7 @@ GM Trainer is a sophisticated web application for chess enthusiasts, combining g
 ## System Architecture
 
 ### UI/UX Decisions
-The application features a clean, modern design with a dark mode theme using Tailwind CSS and Shadcn UI. The layout prioritizes usability with a 60/40 split on desktop for the board and controls, adapting to a stacked layout on mobile. Consistent spacing, card-based content grouping, and clear typography (Inter, JetBrains Mono) enhance readability and user experience. Interactive elements utilize a primary blue color scheme, and chess boards maintain classic Lichess colors. Mobile interactions are optimized with tap-to-move, robust touch drag & drop, large promotion dialogs, and confined scroll areas.
+The application features a clean, modern design with a dark mode theme using Tailwind CSS and Shadcn UI. The layout prioritizes usability with a responsive grid system (1.5fr:1fr on desktop, stacked on mobile) for the board and controls. The chess board maintains a consistent square aspect ratio (1:1) across all screen sizes. Consistent spacing, card-based content grouping, and clear typography (Inter, JetBrains Mono) enhance readability and user experience. Interactive elements utilize a primary blue color scheme, and chess boards maintain classic Lichess colors. Mobile interactions are optimized with tap-to-move, robust touch drag & drop, large promotion dialogs, confined scroll areas (max-h-[40vh] for move history), and sticky controls at the bottom. The viewport is configured without maximum-scale to support accessibility features.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Tailwind CSS, Shadcn UI. Features a custom-built PGN Chess Viewer, responsive design, and persistent theme preference.
@@ -28,12 +28,15 @@ The application features a clean, modern design with a dark mode theme using Tai
 - **Voice System**: Features a dual voice personality system, single-channel audio enforcement (prevents overlapping), mute by default, and quick-access controls with persistent mute state.
 - **Puzzle Training**: Includes an interactive drag-and-drop chess board for solving puzzles, move validation, visual feedback, reset functionality, and automatic attempt tracking.
 - **Progress Tracking**: Records puzzle attempts, time spent, and provides a dedicated statistics page with aggregated data, success rates, and daily activity charts.
-- **Lichess Integration**: Allows importing games by URL or username, and one-click daily puzzle import.
+- **Lichess Integration**: Allows importing games by URL or username (up to 10 games per username), and one-click daily puzzle import.
+- **Multi-Game Support**: Automatic detection and parsing of multi-game PGN files with dropdown selector. Handles both LF and CRLF line endings. Game selector displays "White vs Black · Event · Date" for each game. Switching games updates all metadata and resets board state.
+- **Service Worker**: User-controlled version updates with "Update Now" notification banner. Uses cache-busting pattern with APP_VERSION constant. Only reloads page when user explicitly requests update (no automatic reloads). Implements SKIP_WAITING message pattern for controlled activation.
 - **Coaching Settings**: Provides user personalization options for coaching style (Aggressive, Positional, Tactical, Balanced, Defensive), difficulty, verbosity, and multi-language support. Settings persist via local storage.
 
 ### Feature Specifications
-- **PGN Chess Viewer**: Custom board with coordinate labels and move highlighting.
-- **Lichess Integration**: Game import by URL or username, daily puzzle import from Lichess API with smart data mapping.
+- **PGN Chess Viewer**: Custom board with coordinate labels, move highlighting, and aspect-ratio-based square rendering.
+- **Multi-Game PGN**: Automatic detection of multiple games in PGN, dropdown selector (only visible when 2+ games), metadata parsing with CRLF normalization.
+- **Lichess Integration**: Game import by URL or username (max 10 games), daily puzzle import from Lichess API with smart data mapping.
 - **AI Move Analysis**: Real-time commentary and evaluation badges.
 - **Voice Coaching**: Text-to-speech responses with selectable voice personalities, persistent mute state, and quick controls.
 - **Voice Questions**: Browser-based speech recognition for user queries.
@@ -43,7 +46,8 @@ The application features a clean, modern design with a dark mode theme using Tai
 - **Position Evaluation**: Real-time Stockfish engine evaluation with visual bar, centipawn/mate scores, and best move suggestions.
 - **Progress Statistics**: Comprehensive tracking of puzzle attempts, success rates, and performance analytics.
 - **Coaching Personalization**: User-configurable coaching style, difficulty, verbosity, and language.
-- **Mobile UI**: Optimized touch interactions (tap-to-move, drag & drop), large touch targets, and responsive layouts.
+- **Mobile UI**: Responsive grid layout (stacked on mobile, side-by-side on desktop), square chess board (aspect-ratio 1:1), confined scroll for move history (max-h-40vh), sticky controls, optimized touch interactions (tap-to-move, drag & drop), large touch targets (≥44px), and accessible viewport (no maximum-scale).
+- **Version Updates**: Service Worker with user-controlled update flow, update notification banner, and cache-busting via version constant.
 
 ## External Dependencies
 - **OpenAI API**: Used for GPT-5 access for AI move analysis and coaching.
