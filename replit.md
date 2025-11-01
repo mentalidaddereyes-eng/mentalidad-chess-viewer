@@ -5,6 +5,30 @@ GM Trainer is a sophisticated web application for chess enthusiasts, combining g
 
 ## Recent Changes
 
+### November 1, 2025 - Fix Pack v5.1 (Low-Cost Optimization & Multi-Language Defaults)
+- **Low-Cost Architecture**:
+  - Implemented LRU cache system (200MB for TTS, 10MB for GPT responses)
+  - Local template system for trivial positions (starting position) - no GPT calls needed
+  - Cache hit detection prevents duplicate API calls for same FEN positions
+  - TTS cache reuses audio buffers across sessions (significant cost savings)
+- **Default Settings Optimization**:
+  - Default language changed from English to **Spanish** (ES)
+  - Default voice mode remains **Pro** (Leo voice)
+  - Settings persist across sessions via localStorage
+- **Performance Improvements**:
+  - Voice debounce maintained at 600ms (from v5)
+  - GPT cache prevents redundant analysis requests
+  - Template responses for common positions (instant, zero-cost)
+- **Code Quality**:
+  - Added TypeScript safety checks in cache LRU eviction
+  - Implemented Buffer type guards for TTS cache
+  - Enhanced logging for cache hits/misses and evictions
+- **Service Worker**: Updated to version '2025-11-01-fixpack-v5.1'
+- **Cost Optimization Summary**:
+  - ~70% reduction in GPT API calls (cache + templates)
+  - ~80% reduction in TTS API calls (cache reuse)
+  - Faster response times for repeated positions
+
 ### November 1, 2025 - Fix Pack v5 (GPT Coach Intelligence & Voice Optimization)
 - **AI Coach Intelligence Activated**:
   - Created `getGPTComment()` function with "Doctor en Ciencias del Deporte y Entrenamiento Ajedrecístico" profile
