@@ -57,6 +57,22 @@ export async function fetchGamesByUsername(username: string, max: number = 1): P
     throw new Error("No games found for this user");
   }
   
+  console.log('[games] fetched from username:', games.length, 'games');
+  
+  // If multiple games requested, combine all PGNs
+  if (max > 1) {
+    const pgns: string[] = [];
+    for (const gameJson of games) {
+      const gameData: LichessGame = JSON.parse(gameJson);
+      if (gameData.pgn) {
+        pgns.push(gameData.pgn);
+      }
+    }
+    
+    // Join multiple PGN games with double newline separator
+    return pgns.join('\n\n');
+  }
+  
   // Parse the first game (most recent) - now it's JSON with pgn field
   const gameData: LichessGame = JSON.parse(games[0]);
   
@@ -67,6 +83,18 @@ export async function fetchGamesByUsername(username: string, max: number = 1): P
   
   // Fallback: fetch the PGN for this specific game if not included
   return await fetchGameByUrl(`https://lichess.org/${gameData.id}`);
+}
+
+// Split a multi-game PGN into individual games
+export function splitPgn(pgn: string): string[] {
+  // Split by double newline (separator between games)
+  const rawGames = pgn.split(/\n\n\[Event/).filter(g => g.trim());
+  
+  // Re-add [Event to all but first
+  return rawGames.map((game, index) => {
+    if (index === 0) return game;
+    return `[Event${game}`;
+  });
 }
 
 export function parsePgnMetadata(pgn: string): {

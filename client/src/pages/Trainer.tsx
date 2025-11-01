@@ -14,9 +14,40 @@ import { apiRequest } from "@/lib/queryClient";
 import { Trophy, History, Target, Settings, Volume2, VolumeX } from "lucide-react";
 import { Link, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useVoice } from "@/hooks/use-voice";
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+// Split multi-game PGN into individual games
+function splitPgn(pgn: string): string[] {
+  const rawGames = pgn.split(/\n\n\[Event/).filter(g => g.trim());
+  return rawGames.map((game, index) => {
+    if (index === 0) return game;
+    return `[Event${game}`;
+  });
+}
+
+// Parse basic metadata from PGN
+function parsePgnMeta(pgn: string): { white: string; black: string; event?: string; date?: string } {
+  const lines = pgn.split("\n");
+  const meta: any = {};
+  for (const line of lines) {
+    if (line.startsWith("[")) {
+      const match = line.match(/\[(\w+)\s+"(.+)"\]/);
+      if (match) {
+        const [, key, value] = match;
+        meta[key.toLowerCase()] = value;
+      }
+    }
+  }
+  return {
+    white: meta.white || "White",
+    black: meta.black || "Black",
+    event: meta.event,
+    date: meta.date,
+  };
+}
 
 // Helper to get user settings from localStorage
 function getUserSettings() {
@@ -53,6 +84,10 @@ export default function Trainer() {
   const [currentAnalysis, setCurrentAnalysis] = useState<MoveAnalysis | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [lastQuestion, setLastQuestion] = useState<string>();
+  
+  // Multi-game support
+  const [availablePgns, setAvailablePgns] = useState<string[]>([]);
+  const [currentGameIndex, setCurrentGameIndex] = useState(0);
 
   // Load game from history if gameId is in URL
   const { data: loadedGame } = useQuery<Game>({
@@ -67,7 +102,16 @@ export default function Trainer() {
       return await res.json();
     },
     onSuccess: (data: Game) => {
-      chess.loadPgn(data.pgn);
+      // Check if PGN contains multiple games
+      const games = splitPgn(data.pgn);
+      console.log('[games] loaded:', games.length, 'game(s)');
+      
+      setAvailablePgns(games);
+      setCurrentGameIndex(0);
+      
+      // Load first game
+      const firstPgn = games[0];
+      chess.loadPgn(firstPgn);
       const moves = chess.history();
       chess.reset();
       
@@ -79,7 +123,7 @@ export default function Trainer() {
       setCurrentAnalysis(null);
       
       toast({
-        title: "Game Loaded",
+        title: games.length > 1 ? `${games.length} Games Loaded` : "Game Loaded",
         description: `${data.white} vs ${data.black}`,
       });
     },
@@ -204,7 +248,16 @@ export default function Trainer() {
   // Load game from database when fetched via URL parameter
   useEffect(() => {
     if (loadedGame && loadedGame.pgn) {
-      chess.loadPgn(loadedGame.pgn);
+      // Check for multiple games
+      const games = splitPgn(loadedGame.pgn);
+      console.log('[games] loaded from history:', games.length, 'game(s)');
+      
+      setAvailablePgns(games);
+      setCurrentGameIndex(0);
+      
+      // Load first game
+      const firstPgn = games[0];
+      chess.loadPgn(firstPgn);
       const moves = chess.history();
       chess.reset();
       
@@ -216,6 +269,30 @@ export default function Trainer() {
       setCurrentAnalysis(null);
     }
   }, [loadedGame, chess]);
+  
+  // Handle game selection change
+  const handleGameChange = (gameIndex: string) => {
+    const idx = parseInt(gameIndex);
+    if (idx < 0 || idx >= availablePgns.length) return;
+    
+    console.log('[games] switching to game', idx + 1, 'of', availablePgns.length);
+    
+    setCurrentGameIndex(idx);
+    const selectedPgn = availablePgns[idx];
+    
+    // Load the selected game
+    chess.reset();
+    chess.loadPgn(selectedPgn);
+    const moves = chess.history();
+    chess.reset();
+    
+    setMoveHistory(moves);
+    setCurrentMove(0);
+    setFen(STARTING_FEN);
+    setLastMove(null);
+    setCurrentAnalysis(null);
+    setIsAutoPlaying(false);
+  };
 
   const handleLoadGame = (value: string, type: "url" | "username") => {
     loadGameMutation.mutate({ value, type });
@@ -310,6 +387,42 @@ export default function Trainer() {
             {/* Right Column - Controls & Analysis */}
             <div className="flex flex-col gap-6 min-h-0">
               <GameInfo game={game} />
+              
+              {/* Multi-game selector */}
+              {availablePgns.length > 1 && (
+                <div className="flex items-center gap-3">
+                  <label htmlFor="game-select" className="text-sm font-medium whitespace-nowrap">
+                    Game:
+                  </label>
+                  <Select
+                    value={currentGameIndex.toString()}
+                    onValueChange={handleGameChange}
+                  >
+                    <SelectTrigger
+                      id="game-select"
+                      className="flex-1"
+                      data-testid="select-game"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availablePgns.map((pgn, idx) => {
+                        const meta = parsePgnMeta(pgn);
+                        const label = `${meta.white} vs ${meta.black}${meta.event ? ` · ${meta.event}` : ''}${meta.date ? ` · ${meta.date}` : ''}`;
+                        return (
+                          <SelectItem
+                            key={idx}
+                            value={idx.toString()}
+                            data-testid={`select-game-${idx}`}
+                          >
+                            {idx + 1}. {label}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               
               <div className="flex-1 min-h-0">
                 <AnalysisPanel
