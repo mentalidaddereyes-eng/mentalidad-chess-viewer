@@ -5,6 +5,19 @@ GM Trainer is a sophisticated web application for chess enthusiasts, combining g
 
 ## Recent Changes
 
+### November 1, 2025 - Stockfish API & Play vs Coach Mode
+- **Stockfish API Endpoint**: Implemented `/api/stockfish/analyze` endpoint for engine move generation in Play vs Coach mode
+  - Accepts FEN position and depth parameter
+  - Returns best move in UCI format (e.g., "e2e4"), centipawn score, and mate scores
+  - Uses Stockfish 17.1 engine with configurable depth (default 15)
+- **Play vs Coach Engine Integration**: Engine now automatically makes moves when playing as opponent
+  - When player selects Black, engine makes first move as White within 1 second
+  - Engine responds to player moves with Stockfish-calculated best moves
+  - AI commentary provides explanations for engine moves
+- **Bug Fixes**: 
+  - Fixed PGN loading to display final position with correct move counter
+  - Fixed MoveControls state management for proper currentMove/totalMoves display in both viewing and analysis modes
+
 ### November 1, 2025 - Free Analysis Mode Default & UI Improvements
 - **Default to Free Analysis**: Application now starts in free analysis mode (isAnalysisMode = true on load) for immediate interactive practice
 - **Automatic Analysis**: AI analysis (Stockfish + GPT commentary) triggers automatically on every move in free analysis mode

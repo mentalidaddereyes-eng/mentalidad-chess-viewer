@@ -540,15 +540,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stockfish engine analysis endpoint for Play vs Coach
   app.post("/api/stockfish/analyze", async (req, res) => {
     try {
-      const { fen, depth = 15 } = req.body;
+      // Validate request with Zod schema
+      const stockfishRequestSchema = z.object({
+        fen: z.string().min(1, "FEN string cannot be empty"),
+        depth: z.coerce.number().int().min(1).max(20).default(15),
+      });
       
-      if (!fen) {
-        return res.status(400).json({ error: "Missing FEN position" });
-      }
+      const validated = stockfishRequestSchema.parse(req.body);
       
-      const evaluation = await getStockfishEvaluation(fen, depth);
+      const evaluation = await getStockfishEvaluation(validated.fen, validated.depth);
       res.json(evaluation);
     } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid request", details: error.errors });
+      }
       console.error("Stockfish analysis error:", error);
       res.status(500).json({ error: error.message || "Failed to analyze position" });
     }
