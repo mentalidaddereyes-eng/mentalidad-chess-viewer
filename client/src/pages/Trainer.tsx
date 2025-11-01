@@ -108,11 +108,9 @@ export default function Trainer() {
   const [boardOrientation, setBoardOrientation] = useState<"white" | "black">("white");
   const [isEngineThinking, setIsEngineThinking] = useState(false);
   
-  // Dialogs
-  const [fenDialogOpen, setFenDialogOpen] = useState(false);
-  const [pgnDialogOpen, setPgnDialogOpen] = useState(false);
-  const [customFenInput, setCustomFenInput] = useState("");
-  const [customPgnInput, setCustomPgnInput] = useState("");
+  // Dialogs - Hotfix v5.1.1: Single Import dialog
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importInput, setImportInput] = useState("");
 
   console.log('[mode] free-analysis ready | training=ON | interactive=drag+tap');
 
@@ -406,107 +404,114 @@ export default function Trainer() {
     });
   };
 
-  // Load Custom FEN
-  const handleLoadCustomFen = () => {
-    if (!customFenInput.trim()) {
+  // Hotfix v5.1.1: Single Import with auto-detection PGN/FEN
+  const handleImport = () => {
+    const input = importInput.trim();
+    
+    if (!input) {
       toast({
-        title: "FEN Required",
-        description: "Please enter a valid FEN position",
+        title: "Input required",
+        description: "Please paste a valid PGN or FEN",
         variant: "destructive",
       });
       return;
     }
 
-    try {
-      const testChess = new Chess();
-      testChess.load(customFenInput.trim());
-      
-      analysisModeChess.reset();
-      analysisModeChess.load(customFenInput.trim());
-      setFen(customFenInput.trim());
-      setLastMove(null);
-      setIsAnalysisMode(true);
-      setCurrentAnalysis(null);
-      setExploratoryMoves([]);
-      setFenDialogOpen(false);
-      setCustomFenInput("");
-      
-      // Request AI analysis for this position
-      analyzeMoveMutation.mutate({
-        moveNumber: 0,
-        move: "Custom Position",
-        fen: customFenInput.trim(),
-      });
-      
-      toast({
-        title: "Position Loaded",
-        description: "Custom FEN position loaded for analysis",
-      });
-    } catch (error) {
-      toast({
-        title: "Invalid FEN",
-        description: "Please check your FEN string and try again",
-        variant: "destructive",
-      });
-    }
-  };
+    // FEN detection: starts with piece positions (e.g., "rnbqkbnr/...")
+    const isFen = /^([rnbqkpRNBQKP1-8]+\/){7}[rnbqkpRNBQKP1-8]+/.test(input);
+    
+    // PGN detection: contains [Event or move notation like "1. e4"
+    const isPgn = input.includes('[Event') || /\d+\.\s*[a-h1-8]/i.test(input);
 
-  // Load Custom PGN
-  const handleLoadCustomPgn = () => {
-    if (!customPgnInput.trim()) {
+    if (isFen) {
+      // Load as FEN
+      try {
+        const testChess = new Chess();
+        testChess.load(input);
+        
+        analysisModeChess.reset();
+        analysisModeChess.load(input);
+        setFen(input);
+        setLastMove(null);
+        setIsAnalysisMode(true);
+        setCurrentAnalysis(null);
+        setExploratoryMoves([]);
+        setImportDialogOpen(false);
+        setImportInput("");
+        
+        // Request AI analysis for this position
+        analyzeMoveMutation.mutate({
+          moveNumber: 0,
+          move: "Custom Position",
+          fen: input,
+        });
+        
+        toast({
+          title: "Position Loaded (FEN)",
+          description: "Custom FEN position loaded for analysis",
+        });
+      } catch (error) {
+        toast({
+          title: "Invalid FEN",
+          description: "Please check your FEN string and try again",
+          variant: "destructive",
+        });
+      }
+    } else if (isPgn) {
+      // Load as PGN
+      try {
+        const games = splitPgn(input);
+        console.log('[games] loaded:', games.length);
+        
+        setAvailablePgns(games);
+        setCurrentGameIndex(0);
+        
+        const firstPgn = games[0];
+        chess.reset();
+        chess.loadPgn(firstPgn);
+        const moves = chess.history();
+        const finalFen = chess.fen();
+        const lastMoveObj = chess.history({ verbose: true}).slice(-1)[0];
+        
+        const meta = parsePgnMeta(firstPgn);
+        
+        setGame({
+          id: 0,
+          white: meta.white,
+          black: meta.black,
+          result: null,
+          event: meta.event || null,
+          site: null,
+          opening: null,
+          date: meta.date || null,
+          pgn: input,
+          createdAt: new Date(),
+        });
+        setMoveHistory(moves);
+        setCurrentMove(moves.length); // Jump to last move
+        setFen(finalFen);
+        setLastMove(lastMoveObj ? { from: lastMoveObj.from, to: lastMoveObj.to } : null);
+        setCurrentAnalysis(null);
+        setIsAnalysisMode(false);
+        setImportDialogOpen(false);
+        setImportInput("");
+        
+        toast({
+          title: games.length > 1 ? `${games.length} Games Loaded` : "Game Loaded (PGN)",
+          description: `${meta.white} vs ${meta.black}`,
+        });
+      } catch (error) {
+        toast({
+          title: "Invalid PGN",
+          description: "Please check your PGN and try again",
+          variant: "destructive",
+        });
+      }
+    } else {
+      // Neither FEN nor PGN
       toast({
-        title: "PGN Required",
-        description: "Please enter a valid PGN",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const games = splitPgn(customPgnInput);
-      console.log('[games] loaded:', games.length);
-      
-      setAvailablePgns(games);
-      setCurrentGameIndex(0);
-      
-      const firstPgn = games[0];
-      chess.reset();
-      chess.loadPgn(firstPgn);
-      const moves = chess.history();
-      const finalFen = chess.fen();
-      const lastMoveObj = chess.history({ verbose: true }).slice(-1)[0];
-      
-      const meta = parsePgnMeta(firstPgn);
-      
-      setGame({
-        id: 0,
-        white: meta.white,
-        black: meta.black,
-        result: null,
-        event: meta.event || null,
-        site: null,
-        opening: null,
-        date: meta.date || null,
-        pgn: customPgnInput,
-        createdAt: new Date(),
-      });
-      setMoveHistory(moves);
-      setCurrentMove(moves.length);
-      setFen(finalFen);
-      setLastMove(lastMoveObj ? { from: lastMoveObj.from, to: lastMoveObj.to } : null);
-      setCurrentAnalysis(null);
-      setIsAnalysisMode(false);
-      setPgnDialogOpen(false);
-      setCustomPgnInput("");
-      
-      toast({
-        title: games.length > 1 ? `${games.length} Games Loaded` : "Game Loaded",
-        description: `${meta.white} vs ${meta.black}`,
-      });
-    } catch (error) {
-      toast({
-        title: "Invalid PGN",
-        description: "Please check your PGN and try again",
+        title: "Invalid Input",
+        description: "Please paste a valid PGN or FEN",
         variant: "destructive",
       });
     }
@@ -569,8 +574,7 @@ export default function Trainer() {
             canUndo={exploratoryMoves.length > 0}
             canRedo={false}
             onNewGame={handleNewGame}
-            onLoadPgn={() => setPgnDialogOpen(true)}
-            onLoadFen={() => setFenDialogOpen(true)}
+            onImport={() => setImportDialogOpen(true)}
             onFlipBoard={() => {}}
             onUndo={() => {
               if (exploratoryMoves.length > 0) {
@@ -667,60 +671,30 @@ export default function Trainer() {
         </div>
       </div>
 
-      {/* FEN Dialog */}
-      <Dialog open={fenDialogOpen} onOpenChange={setFenDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Load Custom Position (FEN)</DialogTitle>
-            <DialogDescription>
-              Enter a FEN string to load a custom chess position
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4 pt-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="fen-input">FEN Position</Label>
-              <Input
-                id="fen-input"
-                type="text"
-                placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-                value={customFenInput}
-                onChange={(e) => setCustomFenInput(e.target.value)}
-                className="font-mono text-xs"
-                data-testid="input-custom-fen-dialog"
-              />
-            </div>
-            <Button onClick={handleLoadCustomFen} data-testid="button-load-fen-dialog">
-              <Upload className="w-4 h-4 mr-2" />
-              Load Position
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* PGN Dialog */}
-      <Dialog open={pgnDialogOpen} onOpenChange={setPgnDialogOpen}>
+      {/* Hotfix v5.1.1: Single Import Dialog (auto-detects PGN/FEN) */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Load PGN</DialogTitle>
+            <DialogTitle>Import</DialogTitle>
             <DialogDescription>
-              Paste a PGN to load a game (supports multiple games)
+              Paste a PGN (game) or FEN (position) - automatic detection
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 pt-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="pgn-input">PGN</Label>
+              <Label htmlFor="import-input">PGN or FEN</Label>
               <Textarea
-                id="pgn-input"
-                placeholder="[Event ...]&#10;1. e4 e5 2. Nf3..."
-                value={customPgnInput}
-                onChange={(e) => setCustomPgnInput(e.target.value)}
+                id="import-input"
+                placeholder="[Event ...] 1. e4 e5 2. Nf3... OR rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                value={importInput}
+                onChange={(e) => setImportInput(e.target.value)}
                 className="font-mono text-xs min-h-[200px]"
-                data-testid="input-custom-pgn-dialog"
+                data-testid="import-textarea"
               />
             </div>
-            <Button onClick={handleLoadCustomPgn} data-testid="button-load-pgn-dialog">
+            <Button onClick={handleImport} data-testid="button-import-dialog">
               <Upload className="w-4 h-4 mr-2" />
-              Load PGN
+              Import
             </Button>
           </div>
         </DialogContent>
@@ -728,7 +702,7 @@ export default function Trainer() {
 
       {/* Mobile Dock */}
       <MobileDock
-        onLoad={() => setPgnDialogOpen(true)}
+        onLoad={() => setImportDialogOpen(true)}
         onPrevious={() => {
           if (currentMove > 0) goToMove(currentMove - 1);
         }}

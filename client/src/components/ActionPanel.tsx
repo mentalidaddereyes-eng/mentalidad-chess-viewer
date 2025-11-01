@@ -23,8 +23,7 @@ interface ActionPanelProps {
   canUndo: boolean;
   canRedo: boolean;
   onNewGame: () => void;
-  onLoadPgn: () => void;
-  onLoadFen: () => void;
+  onImport: () => void; // Hotfix v5.1.1: Single Import button (auto-detects PGN/FEN)
   onFlipBoard: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -42,8 +41,7 @@ export function ActionPanel({
   canUndo,
   canRedo,
   onNewGame,
-  onLoadPgn,
-  onLoadFen,
+  onImport, // Hotfix v5.1.1: Single Import callback
   onFlipBoard,
   onUndo,
   onRedo,
@@ -71,26 +69,15 @@ export function ActionPanel({
         New / Reset
       </Button>
 
-      {/* Load PGN */}
+      {/* Hotfix v5.1.1: Single Import button (auto-detects PGN/FEN) */}
       <Button
         variant="outline"
-        onClick={onLoadPgn}
+        onClick={onImport}
         className="w-full justify-start h-9 text-sm"
-        data-testid="button-load-pgn"
+        data-testid="import-button"
       >
         <Upload className="w-4 h-4 mr-2" />
-        Load PGN
-      </Button>
-
-      {/* Load FEN */}
-      <Button
-        variant="outline"
-        onClick={onLoadFen}
-        className="w-full justify-start h-9 text-sm"
-        data-testid="button-load-fen-action"
-      >
-        <Upload className="w-4 h-4 mr-2" />
-        Load FEN
+        Import
       </Button>
 
       <Separator className="my-2" />
