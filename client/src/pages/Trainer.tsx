@@ -105,8 +105,8 @@ export default function Trainer() {
   const [availablePgns, setAvailablePgns] = useState<string[]>([]);
   const [currentGameIndex, setCurrentGameIndex] = useState(0);
   
-  // Analysis mode support
-  const [isAnalysisMode, setIsAnalysisMode] = useState(false);
+  // Analysis mode support - DEFAULT TO TRUE for free analysis mode
+  const [isAnalysisMode, setIsAnalysisMode] = useState(true);
   const [customFenInput, setCustomFenInput] = useState("");
   const [analysisModeChess] = useState(new Chess());
   const [exploratoryMoves, setExploratoryMoves] = useState<string[]>([]); // Track moves made in analysis mode
@@ -545,16 +545,14 @@ export default function Trainer() {
           <div className="trainer-grid h-full">
             {/* Left Column - Chess Board */}
             <div className="flex flex-col gap-6">
-              {/* Analysis Mode Banner */}
-              {isAnalysisMode && (
-                <div className="bg-primary/10 border border-primary/20 rounded-md p-3 flex items-center gap-2">
-                  <Lightbulb className="h-5 w-5 text-primary" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-primary">Analysis Mode Active</p>
-                    <p className="text-xs text-muted-foreground">Make moves to explore alternatives</p>
-                  </div>
+              {/* Free Analysis Status Indicator */}
+              <div className="bg-primary/10 border border-primary/20 rounded-md p-3 flex items-center gap-2" data-testid="banner-free-analysis">
+                <Lightbulb className="h-5 w-5 text-primary" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-primary">Free Analysis Mode</p>
+                  <p className="text-xs text-muted-foreground">Move pieces or load FEN to get instant AI analysis</p>
                 </div>
-              )}
+              </div>
               
               <div className="chess-board-wrapper">
                 {isAnalysisMode ? (
@@ -590,26 +588,6 @@ export default function Trainer() {
               
               {/* Analysis Mode Controls */}
               <div className="flex flex-col gap-3">
-                <Button
-                  variant={isAnalysisMode ? "default" : "outline"}
-                  onClick={handleToggleAnalysisMode}
-                  className="w-full"
-                  data-testid="button-toggle-analysis-mode"
-                  disabled={!game && !isAnalysisMode}
-                >
-                  {isAnalysisMode ? (
-                    <>
-                      <Eye className="w-4 h-4 mr-2" />
-                      Exit Analysis Mode
-                    </>
-                  ) : (
-                    <>
-                      <Lightbulb className="w-4 h-4 mr-2" />
-                      Enter Analysis Mode
-                    </>
-                  )}
-                </Button>
-                
                 {/* Custom FEN Input */}
                 <div className="flex flex-col gap-2 p-4 bg-muted/50 rounded-md">
                   <Label htmlFor="custom-fen" className="text-sm font-medium">

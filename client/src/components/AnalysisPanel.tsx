@@ -12,7 +12,7 @@ interface AnalysisPanelProps {
   isSpeaking: boolean;
 }
 
-const evaluationConfig = {
+const evaluationConfig: Record<string, { label: string; color: string }> = {
   brilliant: { label: "Brilliant!", color: "bg-cyan-500 text-white" },
   good: { label: "Good Move", color: "bg-green-500 text-white" },
   inaccuracy: { label: "Inaccuracy", color: "bg-yellow-500 text-white" },
@@ -43,10 +43,10 @@ export function AnalysisPanel({
       
       <CardContent className="flex-1 flex flex-col gap-4 min-h-0">
         {/* Position Evaluation Bar */}
-        {analysis && (analysis.score !== undefined || analysis.mate !== undefined) && (
+        {analysis && (analysis.score !== undefined && analysis.score !== null || analysis.mate !== undefined && analysis.mate !== null) && (
           <EvaluationBar 
-            score={analysis.score} 
-            mate={analysis.mate}
+            score={analysis.score ?? undefined} 
+            mate={analysis.mate ?? undefined}
           />
         )}
 

@@ -1,5 +1,5 @@
 // Service Worker for GM Trainer - Cache busting and version updates
-const APP_VERSION = '20251101-mobile-multi';
+const APP_VERSION = '2025-11-01-free-analysis-fix';
 
 self.addEventListener('install', (event) => {
   console.log('[sw] version:', APP_VERSION, 'installed');

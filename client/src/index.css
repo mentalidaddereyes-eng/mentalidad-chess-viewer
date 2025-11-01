@@ -419,15 +419,22 @@
     margin: 0 auto;
   }
   
+  /* Anti-scroll: Límite para contenedores de análisis y historial */
+  .confined-scroll {
+    max-height: 40vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  
   /* Scroll interno para move history */
   .move-history-scroll {
-    max-height: 32vh;
+    max-height: 40vh;
     overflow-y: auto;
   }
   
   @media (min-width: 768px) {
     .move-history-scroll {
-      max-height: none;
+      max-height: 40vh;
     }
   }
 }
