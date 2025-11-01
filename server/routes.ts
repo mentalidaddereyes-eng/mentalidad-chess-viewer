@@ -113,11 +113,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         coachingStyle: settings?.coachingStyle || 'balanced'
       });
       
-      // Generate audio for the commentary (only if not muted)
+      // Generate audio for the commentary (only if not muted) - Hotfix v5.1.1: language support
       let audioUrl;
       if (!muted) {
         try {
-          const audioBuffer = await textToSpeech(comment.text, voiceMode || 'pro');
+          const audioBuffer = await textToSpeech(
+            comment.text, 
+            voiceMode || 'pro',
+            settings?.language || 'spanish' // Default Spanish per hotfix v5.1.1
+          );
           
           // In a production app, you'd save this to object storage
           // For now, we'll convert to base64 data URL
@@ -157,11 +161,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get AI answer
       const answer = await answerQuestion(question, context, settings);
       
-      // Generate audio for the answer (only if not muted)
+      // Generate audio for the answer (only if not muted) - Hotfix v5.1.1: language support
       let audioUrl;
       if (!muted) {
         try {
-          const audioBuffer = await textToSpeech(answer, voiceMode || 'pro');
+          const audioBuffer = await textToSpeech(
+            answer, 
+            voiceMode || 'pro',
+            settings?.language || 'spanish' // Default Spanish per hotfix v5.1.1
+          );
           const base64Audio = audioBuffer.toString('base64');
           audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
         } catch (audioError) {
@@ -203,11 +211,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         coachingStyle: settings?.coachingStyle || 'balanced'
       });
       
-      // Generate audio for the comment (only if not muted)
+      // Generate audio for the comment (only if not muted) - Hotfix v5.1.1: language support
       let audioUrl;
       if (!muted) {
         try {
-          const audioBuffer = await textToSpeech(comment.text, voiceMode || 'pro');
+          const audioBuffer = await textToSpeech(
+            comment.text, 
+            voiceMode || 'pro',
+            settings?.language || 'spanish' // Default Spanish per hotfix v5.1.1
+          );
           const base64Audio = audioBuffer.toString('base64');
           audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
         } catch (audioError) {

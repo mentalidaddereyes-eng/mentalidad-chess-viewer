@@ -73,9 +73,9 @@ export const ttsCache = new LRUCache(200);
 // GPT response cache: 10MB for text responses
 export const gptCache = new LRUCache(10);
 
-// Generate cache key for TTS
-export function getTTSCacheKey(text: string, voiceMode: string): string {
-  return `tts:${voiceMode}:${text}`;
+// Generate cache key for TTS (Hotfix v5.1.1: includes language)
+export function getTTSCacheKey(text: string, voiceMode: string, language: string = 'spanish'): string {
+  return `tts:${language}:${voiceMode}:${text}`;
 }
 
 // Generate cache key for GPT commentary

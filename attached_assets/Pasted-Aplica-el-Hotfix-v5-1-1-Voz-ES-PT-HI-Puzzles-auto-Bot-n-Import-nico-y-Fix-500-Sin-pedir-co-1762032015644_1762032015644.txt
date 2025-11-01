@@ -1,0 +1,62 @@
+Aplica el **Hotfix v5.1.1 – Voz ES/PT/HI, Puzzles auto, Botón Import único y Fix 500**. Sin pedir confirmaciones.
+
+OBJETIVO
+- El coach habla SIEMPRE en el idioma seleccionado (ES/PT/HI/EN).
+- Puzzles: se cargan, funcionan y cambian automáticamente al siguiente.
+- Un solo botón **Import** que detecta PGN o FEN y actúa.
+- Corregir error 500 al guardar configuración (settings).
+
+1) VOZ MULTILENGUA (forzar idioma)
+- En `settings` asegura `language` persistente (localStorage + DB). Si DB falla, fallback localStorage.
+- Arregla el 500 en `/api/settings` (typo `gettch failed` → usa `fetch` correcto o corrige el handler/ORM). Valida con Zod y responde 200 OK.
+- En `speak()`:
+  - Usa SIEMPRE `settings.language` y `settings.mode`.
+  - Mapea VOICE_ID por idioma y modo:
+    ES:{pro:LEO_ES, kids:AUGUSTO_ES}
+    PT:{pro:LEO_PT, kids:AUGUSTO_PT}
+    HI:{pro:LEO_HI, kids:AUGUSTO_HI}
+    EN:{pro:LEO_EN, kids:AUGUSTO_EN}
+  - Si cambia idioma → `stop()`, limpia cola y reintenta con el nuevo VOICE_ID.
+  - Quita cualquier default duro a “en-US”.
+  - Añade `data-testid="lang-select"`, `lang-es|pt|hi|en"`.
+- En UI (Coach tab y placeholders) localiza textos (“Ask your coach…” → español cuando lang=ES).
+- Aceptación: Cambiar a Español y hacer una jugada ⇒ habla en español. Repetir en PT y HI.
+
+2) PUZZLES – AUTO SIGUIENTE + ESTABILIDAD
+- Si DB vacía ⇒ `seedSamplePuzzles()` automático al entrar a /puzzles (sin botón).
+- Implementa `onPuzzleEnd(result)` ⇒ `loadNextPuzzle()` tras 400 ms.
+- Persistir dificultad en `localStorage` (`puzzleDifficulty`), sin parpadeos (una sola animación CSS).
+- Añade `data-testid`: `puzzle-next`, `puzzle-difficulty`, `puzzle-answer`.
+- Aceptación: al acertar o fallar, carga el siguiente puzzle solo; selector no “salta”.
+
+3) BOTÓN ÚNICO **IMPORT**
+- En el panel izquierdo, reemplaza “Load PGN” y “Load FEN” por un único botón **Import**.
+- Modal con textarea y detección automática:
+  - Si contiene líneas tipo `[Event` o `1.` ⇒ tratar como **PGN** (soporta múltiples partidas). Tras parseo, saltar a la última jugada.
+  - Si coincide con regex FEN (`^([rnbqkpRNBQKP1-8]+/){7}`) ⇒ tratar como **FEN** y cargar posición.
+  - Si vacío o inválido ⇒ toast “Input requerido: pegue un PGN o un FEN válido”.
+- Añade `data-testid="import-button" | "import-textarea"`.
+
+4) PLAY VS COACH (BLANCAS/NEGRAS)
+- Al activar modo:
+  - Si `playerColor==='black'` ⇒ engine mueve primero y `board.flip()` una vez.
+  - Si `playerColor==='white'` ⇒ usuario mueve primero; no bloquees esperando engine.
+- Al cambiar color después de activar ⇒ reevalúa y ejecuta lógica anterior.
+
+5) BAJO COSTO Y RENDIMIENTO
+- No llamar GPT si `FEN` no cambió.
+- Debounce GPT 400 ms; TTS 600 ms. Cache TTS LRU ≤200 MB (clave = lang|mode|voiceId|sha(text)).
+- Lazy-load de módulos PGN Browser y Puzzles.
+
+6) TESTS E2E (obligatorios)
+- Idioma ES/PT/HI/EN: UI y VOZ cambian; nunca habla inglés si lang≠EN.
+- Import: PGN múltiple lista en la derecha (White–Black · Result · Date · ECO) y salta a última jugada.
+- Puzzles: termina uno ⇒ pasa al siguiente solo.
+- Play vs Coach: con **Black** engine mueve primero; con **White** mueve el usuario.
+- Sin evaluaciones numéricas en la explicación.
+
+7) MENSAJE Y COMMIT
+- Al finalizar imprime EXACTO:
+✅ Hotfix v5.1.1 aplicado: voz en idioma seleccionado, puzzles auto-siguiente, botón único Import (PGN/FEN), fix settings 500, bajo costo.
+- Commit único:
+feat: v5.1.1 i18n-voice fix, puzzles auto-next, single Import (PGN/FEN), settings 500 fix
