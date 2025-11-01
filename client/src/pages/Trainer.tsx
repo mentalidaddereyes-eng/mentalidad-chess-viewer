@@ -306,8 +306,8 @@ export default function Trainer() {
         ...game,
         white: meta.white,
         black: meta.black,
-        event: meta.event,
-        date: meta.date,
+        event: meta.event || null,
+        date: meta.date || null,
         pgn: selectedPgn,
       });
     }
