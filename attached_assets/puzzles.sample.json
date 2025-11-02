@@ -1,0 +1,82 @@
+[
+  {
+    "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1",
+    "solution": "Qxf7#",
+    "explanation": "Scholar's Mate! The queen captures f7 with checkmate, as the king has no escape squares and no piece can block or capture the queen.",
+    "theme": "Checkmate in 1",
+    "rating": 800,
+    "source": "custom"
+  },
+  {
+    "fen": "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 0 1",
+    "solution": "Bxf7+",
+    "explanation": "Bishop takes f7 with check. Black king must move, and White wins the bishop on c5 or gains a strong attack.",
+    "theme": "Fork - Royal Fork",
+    "rating": 1000,
+    "source": "custom"
+  },
+  {
+    "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1",
+    "solution": "Ng5",
+    "explanation": "Knight to g5 threatens Nxf7, forking the queen and rook. Black must defend carefully.",
+    "theme": "Double Attack",
+    "rating": 1200,
+    "source": "custom"
+  },
+  {
+    "fen": "r2qkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 1",
+    "solution": "Nxf7",
+    "explanation": "Knight takes f7, attacking both the queen on d8 and the rook on h8. A classic knight fork!",
+    "theme": "Knight Fork",
+    "rating": 1100,
+    "source": "custom"
+  },
+  {
+    "fen": "r1b1kb1r/pppp1ppp/5n2/4q3/4n3/3P1N2/PPP2PPP/RNBQKB1R w KQkq - 0 1",
+    "solution": "Qa4+",
+    "explanation": "Queen to a4 with check. After the black king moves, White can capture the undefended knight on e4.",
+    "theme": "Pin - Absolute Pin",
+    "rating": 1300,
+    "source": "custom"
+  },
+  {
+    "fen": "r1bqk2r/ppp2ppp/2n5/3p4/1b1P4/2N1PN2/PP3PPP/R1BQKB1R w KQkq - 0 1",
+    "solution": "Qa4",
+    "explanation": "Queen to a4 pins the knight on c6 to the king. Black cannot move the knight without losing it.",
+    "theme": "Pin",
+    "rating": 1400,
+    "source": "custom"
+  },
+  {
+    "fen": "2kr3r/ppp2ppp/2n5/3Pp1q1/1bP5/2N5/PP2QPPP/R1B1KB1R w KQ - 0 1",
+    "solution": "d6",
+    "explanation": "Pawn to d6 is a devastating discovered attack! Moving the pawn reveals the queen's attack on g5, winning the black queen.",
+    "theme": "Discovered Attack",
+    "rating": 1500,
+    "source": "custom"
+  },
+  {
+    "fen": "r1bq1rk1/ppp2ppp/2n2n2/3p4/1bPP4/2N1PN2/PP3PPP/R1BQKB1R w KQ - 0 1",
+    "solution": "Bxf7+",
+    "explanation": "Bishop takes f7 with check, deflecting the king. After Kxf7, White has tactics with Ne5+ forking king and queen.",
+    "theme": "Deflection",
+    "rating": 1600,
+    "source": "custom"
+  },
+  {
+    "fen": "r2qk2r/ppp2ppp/2n2n2/2bpp1B1/2B1P3/2NP1N2/PPP2PPP/R2QK2R w KQkq - 0 1",
+    "solution": "Bxf7+",
+    "explanation": "Bishop sacrifices itself on f7 with check. After Kxf7, Nxe5+ wins the black queen with a royal fork!",
+    "theme": "Sacrifice - Clearing Sacrifice",
+    "rating": 1700,
+    "source": "custom"
+  },
+  {
+    "fen": "r1bq1rk1/ppp2ppp/2n5/3pP3/3Pn3/2P2N2/PP1N1PPP/R1BQK2R w KQ - 0 1",
+    "solution": "Nxe4",
+    "explanation": "Knight captures on e4. If dxe4, then Nxe4 and the knight is well-placed. Black's d-pawn becomes weak.",
+    "theme": "Pawn Structure",
+    "rating": 1800,
+    "source": "custom"
+  }
+]

@@ -1,0 +1,49 @@
+Aplica HOTFIX v6.2.2 sin pedir confirmaciones. Objetivo: estable y útil YA, bajo costo.
+
+1) SETTINGS SIN 500 (FALLBACK REAL)
+- En server/lib/store-provider.ts: getStore() con timeout 2s a Postgres; si falla, usa LocalStore (/tmp/gm-trainer-store.json). Exporta una bandera provider: 'db'|'local'.
+- En routes /api/settings GET y PUT: usar SIEMPRE getStore(); NUNCA lanzar 500 si DB cae. Log: [settings] provider=<db|local>.
+- Corregir serialización Date en LocalStore (reviver) en lecturas/escrituras.
+
+2) TTS MULTI-IDIOMA CON VOZ CORRECTA
+- En server/lib/tts-provider.ts y elevenlabs.ts:
+  - Si process.env.ELEVENLABS_API_KEY existe y plan=pro → ElevenLabs.
+  - Mapear por idioma: ES→ELEVENLABS_VOICE_PRO_ES, EN→..._EN, PT→..._PT; fallback a eleven_multilingual_v2 si falta el ID.
+  - Si no hay API key o plan=free → gTTS con lang del setting.
+- En /api/voice/ask: forzar uso del setting.language para la voz. Nada de default EN.
+- Debounce 600ms y cancelación de audio (single-channel) activos.
+
+3) COACH JUEGA PRIMERO CON NEGRAS
+- En modo “Play vs Coach” si playerColor==='black':
+  - onNewGame(): setOrientation('black'); llamar engineMove() inmediatamente.
+  - Verifica que el primer movimiento actualiza board y history.
+- Test E2E: start-as-black → engine mueve.
+
+4) IMPORT .PGN + PANEL “GAMES” COMPACTO
+- Dialog Import: input type="file" accept=".pgn" + textarea (autodetección PGN/FEN). 
+- Parser multi-PGN: extrae White, Black, Result, ECO, Date. Guarda en store in-memory.
+- RightPanel tab “Games”: lista compacta (max-height: 260px; overflow:auto) con items de 2 líneas:
+    «White - Black»  | «Result (ECO)  Date»
+  Click = cargar partida y saltar al último movimiento.
+- El botón “Import” solo abre el diálogo; nada de ocupar medio layout.
+
+5) FLIP BOARD FUNCIONAL
+- Wire onClick a board.flip(); toggle orientación; deshabilitar si no hay partida.
+
+6) PUZZLES FUNCIONANDO (FALLBACK LOCAL)
+- Si DB inaccesible: cargar puzzles desde /client/assets/puzzles.sample.json y guardarlos en LocalStore.
+- “Seed Sample Puzzles” usa siempre store-provider, sin 500. Auto-next 400ms.
+
+7) COSTO Y RENDIMIENTO
+- GPT memo hash(FEN|language|mode|bestSan), TTL 180s (jitter).
+- Rate limit GPT: 2/min; plantillas locales en posiciones triviales.
+- TTS cache LRU 200MB por idioma/voz.
+
+8) UI POLISH RÁPIDO
+- Reducir padding del RightPanel; tabs: Analysis | Moves | Games | Coach.
+- Mantener el banner de plan; pero default plan=pro si query ?plan=pro (persistencia cookie+localStorage).
+
+Al terminar, imprime EXACTAMENTE:
+✅ v6.2.2 listo: Settings sin 500 y fallback local, voz en español real (o gTTS en Free), coach mueve con negras, Import .PGN con lista “Games” compacta, Flip Board activo, Puzzles con fallback local y auto-next, bajo costo.
+Commit único:
+feat: v6.2.2 stable – settings fallback, es-voice, black-first, compact games, flip fix, puzzles fallback, cost-optim

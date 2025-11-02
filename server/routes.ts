@@ -10,6 +10,8 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import { insertPuzzleSchema, insertPuzzleAttemptSchema } from "@shared/schema";
 import type { PlanMode, VoiceProvider } from "@shared/types"; // Cost Saver Pack v6.0
+import fs from "fs"; // HOTFIX v6.2.2: For loading sample puzzles
+import path from "path"; // HOTFIX v6.2.2: For file paths
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all games
@@ -322,7 +324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all puzzles (with optional filters)
+  // Get all puzzles (with optional filters) - HOTFIX v6.2.2: DB fallback
   app.get("/api/puzzles", async (req, res) => {
     try {
       // Parse and validate query parameters
@@ -390,7 +392,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? { minRating, maxRating, themes }
         : undefined;
       
-      const puzzles = await storage.getAllPuzzles(filters);
+      const { store, provider } = await getStore();
+      console.log('[puzzles] GET provider=', provider);
+      const puzzles = await store.getAllPuzzles(filters);
       res.json(puzzles);
     } catch (error: any) {
       console.error("Failed to fetch puzzles:", error);
@@ -570,60 +574,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Seed sample puzzles (for development/testing)
+  // Seed sample puzzles - HOTFIX v6.2.2: Load from attached_assets, DB fallback
   app.post("/api/puzzles/seed", async (req, res) => {
     try {
-      const samplePuzzles = [
-        {
-          fen: "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
-          solution: "Ra8#",
-          explanation: "Back rank checkmate! The rook delivers mate on the 8th rank.",
-          theme: "Back rank mate",
-          rating: 800,
-          source: "custom",
-        },
-        {
-          fen: "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1",
-          solution: "Nxe5",
-          explanation: "The knight captures the undefended pawn on e5, winning material.",
-          theme: "Material gain",
-          rating: 900,
-          source: "custom",
-        },
-        {
-          fen: "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1",
-          solution: "Ng5",
-          explanation: "The knight attacks f7, threatening a fork on e6 and h7.",
-          theme: "Knight attack",
-          rating: 1000,
-          source: "custom",
-        },
-        {
-          fen: "rnbqkb1r/pppp1ppp/5n2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1",
-          solution: "Nxe5",
-          explanation: "The knight captures the central pawn, establishing control of the center.",
-          theme: "Central control",
-          rating: 1100,
-          source: "custom",
-        },
-        {
-          fen: "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1",
-          solution: "Ng5",
-          explanation: "The knight attacks f7, creating a double attack on the weak square.",
-          theme: "Double attack",
-          rating: 1200,
-          source: "custom",
-        },
-      ];
+      // Load puzzles from attached_assets/puzzles.sample.json
+      const puzzlesPath = path.join(process.cwd(), 'attached_assets', 'puzzles.sample.json');
+      let samplePuzzles: any[] = [];
+      
+      try {
+        const fileContent = await fs.promises.readFile(puzzlesPath, 'utf-8');
+        samplePuzzles = JSON.parse(fileContent);
+        console.log('[puzzles] loaded', samplePuzzles.length, 'sample puzzles from file');
+      } catch (fileError) {
+        console.warn('[puzzles] sample file not found, using fallback hardcoded puzzles');
+        // Fallback to minimal hardcoded puzzles if file doesn't exist
+        samplePuzzles = [
+          {
+            fen: "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
+            solution: "Ra8#",
+            explanation: "Back rank checkmate! The rook delivers mate on the 8th rank.",
+            theme: "Back rank mate",
+            rating: 800,
+            source: "custom",
+          },
+          {
+            fen: "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 1",
+            solution: "Nxe5",
+            explanation: "The knight captures the undefended pawn on e5, winning material.",
+            theme: "Material gain",
+            rating: 900,
+            source: "custom",
+          },
+        ];
+      }
+
+      const { store, provider } = await getStore();
+      console.log('[puzzles] seed provider=', provider);
 
       const createdPuzzles = [];
       for (const puzzle of samplePuzzles) {
-        const created = await storage.createPuzzle(puzzle);
+        const created = await store.createPuzzle(puzzle);
         createdPuzzles.push(created);
       }
 
       res.json({ 
-        message: `Seeded ${createdPuzzles.length} puzzles`, 
+        message: `Seeded ${createdPuzzles.length} puzzles (provider: ${provider})`, 
         puzzles: createdPuzzles 
       });
     } catch (error: any) {

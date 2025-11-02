@@ -536,6 +536,11 @@ export default function Trainer() {
     }
   };
 
+  // Flip board orientation
+  const handleFlipBoard = () => {
+    setBoardOrientation(prev => prev === "white" ? "black" : "white");
+  };
+
   // Toggle Play vs Coach
   const handleTogglePlayVsCoach = () => {
     if (!isPlayVsCoach) {
@@ -594,7 +599,7 @@ export default function Trainer() {
             canRedo={false}
             onNewGame={handleNewGame}
             onImport={() => setImportDialogOpen(true)}
-            onFlipBoard={() => {}}
+            onFlipBoard={handleFlipBoard}
             onUndo={() => {
               if (exploratoryMoves.length > 0) {
                 analysisModeChess.undo();
@@ -765,7 +770,7 @@ export default function Trainer() {
         onNext={() => {
           if (currentMove < moveHistory.length) goToMove(currentMove + 1);
         }}
-        onFlip={() => {}}
+        onFlip={handleFlipBoard}
         onVoice={() => {
           // Switch to Coach tab on mobile
           toast({

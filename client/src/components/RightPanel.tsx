@@ -56,7 +56,7 @@ export function RightPanel({
   return (
     <Card className="h-full flex flex-col">
       <Tabs defaultValue="analysis" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="mx-3 mt-3 grid w-[calc(100%-1.5rem)] grid-cols-4">
+        <TabsList className="mx-2 mt-2 grid w-[calc(100%-1rem)] grid-cols-4">
           <TabsTrigger value="analysis" className="text-xs" data-testid="tab-analysis">
             <Bot className="w-3 h-3 mr-1" />
             Analysis
@@ -76,7 +76,7 @@ export function RightPanel({
         </TabsList>
 
         {/* Analysis Tab */}
-        <TabsContent value="analysis" className="flex-1 mt-0 p-3 min-h-0 flex flex-col gap-3">
+        <TabsContent value="analysis" className="flex-1 mt-0 p-2 min-h-0 flex flex-col gap-2">
           {analysis && (
             <>
               {/* Evaluation Bar */}
@@ -141,7 +141,7 @@ export function RightPanel({
         </TabsContent>
 
         {/* Moves Tab */}
-        <TabsContent value="moves" className="flex-1 mt-0 p-3 min-h-0">
+        <TabsContent value="moves" className="flex-1 mt-0 p-2 min-h-0">
           <ScrollArea className="confined-scroll h-full">
             <div className="pr-4 font-mono text-sm" data-testid="text-move-history">
               {displayMoves.length === 0 ? (
@@ -177,7 +177,7 @@ export function RightPanel({
         </TabsContent>
 
         {/* Games Tab - HOTFIX v6.2 */}
-        <TabsContent value="games" className="flex-1 mt-0 p-3 min-h-0">
+        <TabsContent value="games" className="flex-1 mt-0 p-2 min-h-0">
           <ScrollArea className="confined-scroll h-full" data-testid="games-panel">
             <div className="pr-4">
               {games.length === 0 ? (
@@ -206,7 +206,7 @@ export function RightPanel({
         </TabsContent>
 
         {/* Coach Tab */}
-        <TabsContent value="coach" className="flex-1 mt-0 p-3 min-h-0 flex flex-col gap-3">
+        <TabsContent value="coach" className="flex-1 mt-0 p-2 min-h-0 flex flex-col gap-2">
           <div className="flex flex-col gap-2">
             <Textarea
               placeholder="Ask your chess coach a question..."
