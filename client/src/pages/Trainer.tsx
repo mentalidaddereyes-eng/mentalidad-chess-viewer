@@ -13,6 +13,7 @@ import { ChessComHeader } from "@/components/ChessComHeader";
 import { ActionPanel } from "@/components/ActionPanel";
 import { RightPanel } from "@/components/RightPanel";
 import { MobileDock } from "@/components/MobileDock";
+import { PositionEditor } from "@/components/PositionEditor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -113,6 +114,9 @@ export default function Trainer() {
   // Dialogs - Hotfix v5.1.1: Single Import dialog
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importInput, setImportInput] = useState("");
+  
+  // v7.0: Position Editor
+  const [editorOpen, setEditorOpen] = useState(false);
   
   // HOTFIX v6.2: Multi-game import from file
   const [importedGames, setImportedGames] = useState<Array<{pgn: string; white: string; black: string; result: string; eco: string; date: string}>>([]);
@@ -577,6 +581,124 @@ export default function Trainer() {
     }
   };
 
+  // v7.0: Load position from editor
+  const handleLoadPosition = (fen: string) => {
+    try {
+      analysisModeChess.load(fen);
+      setFen(fen);
+      setExploratoryMoves([]);
+      setLastMove(null);
+      setCurrentAnalysis(null);
+      toast({
+        title: "Posición cargada",
+        description: "La posición personalizada ha sido cargada en el tablero",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "FEN inválido",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // v7.0: Export PGN with local heuristic comments (no GPT)
+  const handleExportPgn = () => {
+    if (moveHistory.length === 0) {
+      toast({
+        title: "Sin movimientos",
+        description: "No hay movimientos para exportar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Generate PGN with heuristic comments
+    const tempChess = new Chess();
+    let pgn = '[Event "GM Trainer Analysis"]\n';
+    pgn += '[Site "Replit"]\n';
+    pgn += `[Date "${new Date().toISOString().split('T')[0]}"]\n`;
+    pgn += '[White "Player"]\n';
+    pgn += '[Black "Player"]\n';
+    pgn += '[Result "*"]\n\n';
+
+    let moveNumber = 1;
+    moveHistory.forEach((move, index) => {
+      const moveObj = tempChess.move(move);
+      if (!moveObj) return;
+
+      // Add move number for white
+      if (index % 2 === 0) {
+        pgn += `${moveNumber}. `;
+      }
+
+      // Add the move
+      pgn += move + ' ';
+
+      // Generate simple heuristic comment
+      const comments = [];
+      
+      // Check for capture
+      if (moveObj.captured) {
+        comments.push('Captura material');
+      }
+      
+      // Check for check
+      if (tempChess.inCheck()) {
+        comments.push('Jaque');
+      }
+      
+      // Check for checkmate
+      if (tempChess.isCheckmate()) {
+        comments.push('Jaque mate!');
+      }
+      
+      // Check for center control (e4, d4, e5, d5)
+      if (['e4', 'd4', 'e5', 'd5'].includes(moveObj.to)) {
+        comments.push('Control del centro');
+      }
+      
+      // Check for piece development (knights and bishops in opening)
+      if (index < 10 && (moveObj.piece === 'n' || moveObj.piece === 'b')) {
+        comments.push('Desarrollo de piezas');
+      }
+      
+      // Check for castling
+      if (moveObj.flags.includes('k') || moveObj.flags.includes('q')) {
+        comments.push('Enroque - Seguridad del rey');
+      }
+
+      // Add comment if any
+      if (comments.length > 0) {
+        pgn += `{ ${comments.join(', ')} } `;
+      }
+
+      // New line after black's move
+      if (index % 2 === 1) {
+        pgn += '\n';
+        moveNumber++;
+      }
+    });
+
+    pgn += '*\n';
+
+    // Download the PGN file
+    const blob = new Blob([pgn], { type: 'application/x-chess-pgn' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gm-trainer-${Date.now()}.pgn`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "PGN exportado",
+      description: "Archivo descargado con comentarios de análisis",
+    });
+  };
+
   return (
     <div className="chesscom-layout">
       <ChessComHeader
@@ -599,6 +721,7 @@ export default function Trainer() {
             canRedo={false}
             onNewGame={handleNewGame}
             onImport={() => setImportDialogOpen(true)}
+            onOpenEditor={() => setEditorOpen(true)}
             onFlipBoard={handleFlipBoard}
             onUndo={() => {
               if (exploratoryMoves.length > 0) {
@@ -609,7 +732,7 @@ export default function Trainer() {
             }}
             onRedo={() => {}}
             onToggleAutoPlay={() => setIsAutoPlaying(!isAutoPlaying)}
-            onExportPgn={() => {}}
+            onExportPgn={handleExportPgn}
             onSettings={() => setLocation("/settings")}
             onTogglePlayVsCoach={handleTogglePlayVsCoach}
             onPlayerColorChange={(color) => {
@@ -692,6 +815,8 @@ export default function Trainer() {
             onAskQuestion={(q) => askQuestionMutation.mutate(q)}
             lastAnswer={lastAnswer}
             games={importedGames}
+            currentFen={fen}
+            onExportPgn={handleExportPgn}
             onSelectGame={(index: number) => {
               const game = importedGames[index];
               chess.reset();
@@ -760,6 +885,14 @@ export default function Trainer() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* v7.0: Position Editor */}
+      <PositionEditor
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        onLoadPosition={handleLoadPosition}
+        initialFen={fen}
+      />
 
       {/* Mobile Dock */}
       <MobileDock

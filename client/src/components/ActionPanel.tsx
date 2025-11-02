@@ -11,7 +11,8 @@ import {
   Download,
   Settings,
   Swords,
-  Home
+  Home,
+  Edit3
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -24,6 +25,7 @@ interface ActionPanelProps {
   canRedo: boolean;
   onNewGame: () => void;
   onImport: () => void; // Hotfix v5.1.1: Single Import button (auto-detects PGN/FEN)
+  onOpenEditor: () => void; // v7.0: Position Editor
   onFlipBoard: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -42,6 +44,7 @@ export function ActionPanel({
   canRedo,
   onNewGame,
   onImport, // Hotfix v5.1.1: Single Import callback
+  onOpenEditor, // v7.0: Position Editor
   onFlipBoard,
   onUndo,
   onRedo,
@@ -78,6 +81,17 @@ export function ActionPanel({
       >
         <Upload className="w-4 h-4 mr-2" />
         Import
+      </Button>
+
+      {/* v7.0: Position Editor */}
+      <Button
+        variant="outline"
+        onClick={onOpenEditor}
+        className="w-full justify-start h-9 text-sm"
+        data-testid="editor-open"
+      >
+        <Edit3 className="w-4 h-4 mr-2" />
+        Editor
       </Button>
 
       <Separator className="my-2" />

@@ -1,0 +1,42 @@
+Aplica FEATURE MINI-PACK v7.0 (barato, sin confirmaciones).
+Objetivo: utilidades pro sin subir costos y arreglar UX del panel de partidas.
+
+1) Editor de Posiciones (FEN)
+- Nuevo botón “Editor” en el ActionPanel.
+- Modal con tablero editable: arrastrar/soltar piezas, seleccionar turno, en-passant, castling.
+- Botones: “Cargar en tablero”, “Copiar FEN”, “Guardar como Favorita” (LocalStore).
+- data-testid: editor-open, editor-apply, editor-copy, editor-save.
+
+2) Explorador de Aperturas (ECO offline)
+- Añadir pestaña “Aperturas” en el RightPanel (tabs: Analysis | Moves | Games | Aperturas | Coach).
+- Cargar un archivo estático `eco.min.json` (~2–3k líneas comunes).
+- Mostrar: ECO, nombre, línea principal (SAN). Si la posición coincide → resaltar y sugerir 1–2 continuaciones (de JSON).
+- Botón “Ver en Lichess” (link externo) sin API.
+- data-testid: tab-openings, opening-hit, opening-next.
+
+3) Exportar PGN con comentarios (sin GPT)
+- Botón “Exportar PGN” en Moves.
+- Generar PGN de la partida actual con comentarios basados en plantillas locales (sin números): 
+  - Heurísticas simples: desarrollo, centro, seguridad del rey, táctica vista (captura, jaque, clavada).
+- Descargar archivo `.pgn`.
+- data-testid: export-pgn.
+
+4) Panel “Games” compacto (tu pedido)
+- Altura fija 240–280px, `overflow:auto`, tarjetas densas (2 líneas): 
+  «White - Black» | «Result (ECO)  Date»
+- Mantener Import por archivo .pgn + textarea; no invadir layout.
+- data-testid: games-pane-compact.
+
+5) Play vs Coach (Black-first) + Flip
+- Si jugador elige Black → `flipBoard(true)` y `engineMove()` inmediato (<=1000ms).
+- Botón Flip Board conectado a `board.flip()`.
+- data-testid: select-player-color, start-coach, btn-flip.
+
+6) Costos
+- Cero GPT en estas features. Solo plantillas locales y JSON.
+- Sin llamadas externas salvo link a Lichess (no API).
+
+Mensaje final (imprimir EXACTO):
+✅ MINI-PACK v7.0: Editor FEN, Aperturas ECO offline, Exportar PGN con comentarios, Games compacto, Black-first + Flip OK, sin costo extra.
+Commit único:
+feat: v7.0 mini-pack (FEN editor, offline ECO, PGN export, compact games, black-first+flip)
