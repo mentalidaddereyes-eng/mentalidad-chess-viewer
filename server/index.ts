@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import path from "path";
 
 const app = express();
 
@@ -15,6 +16,9 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: false }));
+
+// v7.0: Serve attached_assets statically (for eco.min.json, puzzles.sample.json, etc)
+app.use(express.static(path.join(process.cwd(), 'attached_assets')));
 
 app.use((req, res, next) => {
   const start = Date.now();

@@ -67,7 +67,7 @@ export function RightPanel({
 
   // v7.0: Load ECO data on mount
   useEffect(() => {
-    fetch('/attached_assets/eco.min.json')
+    fetch('/eco.min.json')
       .then(res => res.json())
       .then(data => setOpenings(data))
       .catch(err => console.error('Failed to load ECO data:', err));
