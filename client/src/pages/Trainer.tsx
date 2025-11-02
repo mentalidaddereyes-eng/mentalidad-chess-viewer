@@ -32,8 +32,8 @@ function splitPgn(pgn: string): string[] {
   return rawGames;
 }
 
-// Parse basic metadata from PGN
-function parsePgnMeta(pgn: string): { white: string; black: string; event?: string; date?: string } {
+// Parse basic metadata from PGN (HOTFIX v6.2: added result, eco)
+function parsePgnMeta(pgn: string): { white: string; black: string; event?: string; date?: string; result?: string; eco?: string } {
   const normalized = pgn.replace(/\r\n/g, '\n');
   const lines = normalized.split("\n");
   const meta: any = {};
@@ -53,6 +53,8 @@ function parsePgnMeta(pgn: string): { white: string; black: string; event?: stri
     black: meta.black || "Black",
     event: meta.event,
     date: meta.date,
+    result: meta.result,
+    eco: meta.eco,
   };
 }
 
@@ -111,6 +113,9 @@ export default function Trainer() {
   // Dialogs - Hotfix v5.1.1: Single Import dialog
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importInput, setImportInput] = useState("");
+  
+  // HOTFIX v6.2: Multi-game import from file
+  const [importedGames, setImportedGames] = useState<Array<{pgn: string; white: string; black: string; result: string; eco: string; date: string}>>([]);
 
   console.log('[mode] free-analysis ready | training=ON | interactive=drag+tap');
 
@@ -466,6 +471,20 @@ export default function Trainer() {
         setAvailablePgns(games);
         setCurrentGameIndex(0);
         
+        // HOTFIX v6.2: Parse metadata for all games
+        const gamesData = games.map((pgn) => {
+          const meta = parsePgnMeta(pgn);
+          return {
+            pgn,
+            white: meta.white || "Unknown",
+            black: meta.black || "Unknown",
+            result: meta.result || "*",
+            eco: meta.eco || "",
+            date: meta.date || "",
+          };
+        });
+        setImportedGames(gamesData);
+        
         const firstPgn = games[0];
         chess.reset();
         chess.loadPgn(firstPgn);
@@ -667,6 +686,22 @@ export default function Trainer() {
             isAnalysisMode={isAnalysisMode}
             onAskQuestion={(q) => askQuestionMutation.mutate(q)}
             lastAnswer={lastAnswer}
+            games={importedGames}
+            onSelectGame={(index: number) => {
+              const game = importedGames[index];
+              chess.reset();
+              chess.loadPgn(game.pgn);
+              const moves = chess.history();
+              const finalFen = chess.fen();
+              const lastMoveObj = chess.history({ verbose: true}).slice(-1)[0];
+              setMoveHistory(moves);
+              setCurrentMove(moves.length);
+              setFen(finalFen);
+              setLastMove(lastMoveObj ? { from: lastMoveObj.from, to: lastMoveObj.to } : null);
+              setCurrentAnalysis(null);
+              setIsAnalysisMode(false);
+              console.log('[games] selected game', index, game.white, 'vs', game.black);
+            }}
           />
         </div>
       </div>
@@ -677,12 +712,33 @@ export default function Trainer() {
           <DialogHeader>
             <DialogTitle>Import</DialogTitle>
             <DialogDescription>
-              Paste a PGN (game) or FEN (position) - automatic detection
+              Paste PGN/FEN or upload .pgn file - automatic detection
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 pt-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="import-input">PGN or FEN</Label>
+              <Label htmlFor="file-input">Upload .PGN File</Label>
+              <input
+                id="file-input"
+                type="file"
+                accept=".pgn"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const content = ev.target?.result as string;
+                      setImportInput(content);
+                    };
+                    reader.readAsText(file);
+                  }
+                }}
+                className="text-sm"
+                data-testid="input-file-pgn"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="import-input">Or Paste PGN/FEN</Label>
               <Textarea
                 id="import-input"
                 placeholder="[Event ...] 1. e4 e5 2. Nf3... OR rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"

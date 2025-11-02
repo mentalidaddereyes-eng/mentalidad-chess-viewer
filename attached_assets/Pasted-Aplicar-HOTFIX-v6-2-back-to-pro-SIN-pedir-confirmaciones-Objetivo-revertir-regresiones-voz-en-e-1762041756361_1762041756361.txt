@@ -1,0 +1,62 @@
+Aplicar HOTFIX v6.2 "back-to-pro" SIN pedir confirmaciones. Objetivo: revertir regresiones, voz en español real, importación .PGN desde archivo, navegador de partidas en la derecha, puzzles funcionales, y engine jugando al elegir negras. Mantener BAJO COSTO.
+
+### 0) Modo trabajo
+- Rama: main. Un solo commit final: `hotfix: v6.2 voice-es, file-PGN, game-browser, puzzles-fix, engine-black`.
+- Build estable, sin overlay de HMR en prod. Service worker versión `2025-11-01-v6.2`.
+
+### 1) Settings 500 y persistencia (DB fallback real)
+- Revisar `server/lib/store-provider.ts` y rutas `/api/settings/*`.
+- Si PostgreSQL falla, usar `LocalStore` en `/tmp/gm-trainer-store.json` **sin** lanzar 500. `getStore()` retorna siempre un provider válido (db|local).
+- `setSettings`/`getSettings` deben funcionar (prueba: cambiar voz Leo/Augusto y guardar sin error).
+- Log mínimo: `[settings] provider=db|local`.
+
+### 2) Voz: español real + latencia baja
+- `server/lib/tts-provider.ts`: si existe `ELEVENLABS_API_KEY`, usar ElevenLabs; si no, gTTS. Respetar `language` del usuario.
+- Mapear voces por idioma (usar ENV si existen, con fallback sensato):
+  - ES: `ELEVENLABS_VOICE_PRO_ES`, `ELEVENLABS_VOICE_KIDS_ES`
+- Debounce TTS 600 ms + **cancelación** de audios previos (single-channel). No decir frases genéricas. Usar `getGPTComment()` o plantillas locales si se rate-limita.
+- Aceptación: en Settings selecciono **Spanish (Español)** y **Leo (Profesional)** → la voz se escucha en español en <3 s.
+
+### 3) Importación .PGN desde archivo (no solo texto)
+- En el diálogo **Import**, agregar botón **"Seleccionar archivo .pgn"** (`<input type="file" accept=".pgn">`).
+- Leer con `FileReader.readAsText` (cliente) y procesar:
+  - Detectar PGN vs FEN automáticamente.
+  - Para PGN con múltiples partidas: parsear (lib simple tipo `@mliebelt/pgn-parser` o parser ligero propio) y guardar en estado `games[]`.
+- API opcional: `/api/pgn/parse` si prefieres parse server-side, pero **no obligatorio**.
+
+### 4) Navegador de partidas (columna derecha)
+- En la columna derecha (debajo de tabs), agregar panel **Games** con lista scroll:
+  - Mostrar: **White – Black**, **Result**, **ECO**, **Date**.
+  - Al hacer clic: cargar esa partida, saltar a la última jugada y refrescar contador de jugadas.
+- Data-testid: `games-panel`, `game-row-INDEX`.
+
+### 5) Play vs Coach: empezar con negras
+- Al activar **Play vs Coach**:
+  - Si `playerColor === 'black'` → `flipBoard(true)` y **llamar** `makeEngineMove()` inmediatamente.
+  - Asegurar que al cambiar color **antes o después** de activar el modo se dispara el turno correcto.
+- Data-testid: `select-player-color`, `play-vs-coach`.
+
+### 6) Puzzles: semilla, auto-siguiente y errores
+- Si DB no disponible, semillar 5 puzzles locales en LocalStore (sin 500).
+- Arreglar “Invalid puzzle data”: validar FEN y movida solución.
+- Al resolver/fallar: avanzar automáticamente al siguiente en 400 ms.
+- Guardar dificultad en localStorage. Botón “Seed Sample Puzzles” debe funcionar sin errores.
+
+### 7) Idioma coherente
+- UI y **voz** deben seguir el `language` seleccionado. Quitar cualquier hardcode en EN.
+- Aceptación: cambiando a PT/HI la TTS cambia de idioma (si hay key, ElevenLabs; si no, gTTS).
+
+### 8) Costos
+- No llamar GPT si FEN no cambió.
+- Memo GPT por `hash(FEN|lang|mode|bestSan)` TTL 180–300 s.
+- Limitar GPT a 2/min; si se excede, usar plantilla local breve (sin números de eval).
+
+### 9) QA rápido (E2E básico)
+- Guardar Settings sin 500.
+- Importar **archivo** `.pgn` desde PC → lista en **Games** visible → seleccionar una partida → tablero en última jugada.
+- **Play vs Coach** con negras → engine mueve primero.
+- Voz en ES (Leo) < 3 s.
+- Puzzles: “Seed”, resolver uno → pasa al siguiente.
+
+### 10) Mensaje al terminar (imprimir EXACTO)
+✅ HOTFIX v6.2 aplicado: voz español real, importación de archivo .PGN, navegador de partidas a la derecha, puzzles OK con auto-siguiente, engine mueve al jugar con negras, settings sin 500, bajo costo.

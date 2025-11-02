@@ -18,6 +18,8 @@ interface RightPanelProps {
   isAnalysisMode?: boolean;
   onAskQuestion?: (question: string) => void;
   lastAnswer?: string;
+  games?: Array<{pgn: string; white: string; black: string; result: string; eco: string; date: string}>;
+  onSelectGame?: (index: number) => void;
 }
 
 const evaluationConfig: Record<string, { label: string; color: string }> = {
@@ -37,6 +39,8 @@ export function RightPanel({
   isAnalysisMode = false,
   onAskQuestion,
   lastAnswer,
+  games = [],
+  onSelectGame,
 }: RightPanelProps) {
   const [question, setQuestion] = useState("");
 
@@ -52,7 +56,7 @@ export function RightPanel({
   return (
     <Card className="h-full flex flex-col">
       <Tabs defaultValue="analysis" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="mx-3 mt-3 grid w-[calc(100%-1.5rem)] grid-cols-3">
+        <TabsList className="mx-3 mt-3 grid w-[calc(100%-1.5rem)] grid-cols-4">
           <TabsTrigger value="analysis" className="text-xs" data-testid="tab-analysis">
             <Bot className="w-3 h-3 mr-1" />
             Analysis
@@ -60,6 +64,10 @@ export function RightPanel({
           <TabsTrigger value="moves" className="text-xs" data-testid="tab-moves">
             <List className="w-3 h-3 mr-1" />
             Moves
+          </TabsTrigger>
+          <TabsTrigger value="games" className="text-xs" data-testid="tab-games">
+            <List className="w-3 h-3 mr-1" />
+            Games
           </TabsTrigger>
           <TabsTrigger value="coach" className="text-xs" data-testid="tab-coach">
             <MessageSquare className="w-3 h-3 mr-1" />
@@ -162,6 +170,35 @@ export function RightPanel({
                     }
                     return null;
                   })}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        {/* Games Tab - HOTFIX v6.2 */}
+        <TabsContent value="games" className="flex-1 mt-0 p-3 min-h-0">
+          <ScrollArea className="confined-scroll h-full" data-testid="games-panel">
+            <div className="pr-4">
+              {games.length === 0 ? (
+                <p className="text-muted-foreground text-xs">No games imported. Use Import to load .PGN files.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {games.map((game, index) => (
+                    <div
+                      key={index}
+                      data-testid={`game-row-${index}`}
+                      onClick={() => onSelectGame?.(index)}
+                      className="p-2 border rounded-md hover-elevate active-elevate-2 cursor-pointer text-xs"
+                    >
+                      <div className="font-semibold">{game.white} - {game.black}</div>
+                      <div className="flex gap-2 text-muted-foreground mt-1">
+                        {game.result && <span>{game.result}</span>}
+                        {game.eco && <span>({game.eco})</span>}
+                        {game.date && <span>{game.date}</span>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
