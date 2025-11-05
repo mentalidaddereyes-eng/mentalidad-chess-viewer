@@ -794,7 +794,7 @@ export default function Trainer() {
         isLoading={false}
       />
 
-      <div className="chesscom-grid">
+      <div className="chesscom-grid main-grid">
         {/* Left Panel - Actions */}
         <div className="hidden lg:block overflow-y-auto">
           <ActionPanel
@@ -836,18 +836,20 @@ export default function Trainer() {
 
         {/* Center Panel - Chess Board */}
         <div className="flex flex-col gap-2 overflow-hidden">
-          <div ref={boardWrapperRef} className="chess-board-wrapper">
-            <Suspense fallback={<div className="w-full h-full flex items-center justify-center p-6">Cargando tablero...</div>}>
-              <InteractiveChessBoard
-                fen={fen}
-                orientation={boardOrientation}
-                onMove={handleMove}
-                showLegalMoves={true}
-                disabled={isEngineThinking}
-                className="w-full h-full"
-                data-testid="interactive-chess-board"
-              />
-            </Suspense>
+          <div ref={boardWrapperRef} className="board-wrap">
+            <div className="board">
+              <Suspense fallback={<div className="w-full h-full flex items-center justify-center p-6">Cargando tablero...</div>}>
+                <InteractiveChessBoard
+                  fen={fen}
+                  orientation={boardOrientation}
+                  onMove={handleMove}
+                  showLegalMoves={true}
+                  disabled={isEngineThinking}
+                  className="w-full h-full"
+                  data-testid="interactive-chess-board"
+                />
+              </Suspense>
+            </div>
           </div>
 
           {/* Compact navigation under board */}
