@@ -32,7 +32,7 @@ export function MoveControls({
   const isAtEnd = safeCurrentMove >= safeTotalMoves;
 
   return (
-    <div className="flex items-center justify-center gap-1 mt-1 mb-2" data-testid="container-move-controls">
+    <div className="move-controls" data-testid="container-move-controls">
       {/* Compact control buttons (≤40px height, gap ≤6px) */}
       <Button
         size="sm"
