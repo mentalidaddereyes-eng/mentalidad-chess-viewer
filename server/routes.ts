@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { getStore } from "./lib/store-provider"; // HOTFIX v6.1: DB fallback
 import { fetchGameByUrl, fetchGamesByUsername, parsePgnMetadata } from "./lib/lichess";
+import { fetchPgnByChessComUrl } from "./lib/chesscom";
 import { analyzeMove, answerQuestion } from "./lib/openai";
 import { generateSpeech, getTTSProvider } from "./lib/tts-provider"; // Cost Saver Pack v6.0
 import { getStockfishEvaluation } from "./lib/stockfish";
@@ -77,6 +78,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Game import error:", error);
       res.status(500).json({ error: error.message || "Failed to import game" });
+    }
+  });
+
+  // Import game from Chess.com by URL
+  app.post("/api/games/import-chesscom", async (req, res) => {
+    try {
+      const { url } = req.body || {};
+      if (!url) {
+        return res.status(400).json({ error: "Missing url" });
+      }
+
+      const pgn = await fetchPgnByChessComUrl(url);
+
+      // Parse metadata and store
+      const metadata = parsePgnMetadata(pgn);
+      const game = await storage.createGame({
+        pgn,
+        ...metadata,
+      });
+
+      res.json(game);
+    } catch (error: any) {
+      console.error("Chess.com import error:", error);
+      res.status(500).json({ error: error.message || "Failed to import chess.com game" });
     }
   });
 

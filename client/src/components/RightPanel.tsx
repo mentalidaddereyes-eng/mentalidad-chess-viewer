@@ -65,9 +65,9 @@ export function RightPanel({
     }
   };
 
-  // v7.0: Load ECO data on mount
+  // v7.0: Load ECO data on mount (moved to public to avoid HTML fallback issues)
   useEffect(() => {
-    fetch('/attached_assets/eco.min.json')
+    fetch('/eco.min.json')
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

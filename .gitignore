@@ -9,3 +9,8 @@ replit-agent
 .local/state/replit
 .vite
 package-lock.json
+.replit
+replit.md
+.local/state/replit
+.vite
+package-lock.json

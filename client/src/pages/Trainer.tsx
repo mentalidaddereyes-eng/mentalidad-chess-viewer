@@ -119,6 +119,8 @@ export default function Trainer() {
   // Dialogs - Hotfix v5.1.1: Single Import dialog
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importInput, setImportInput] = useState("");
+  const [lichessUrl, setLichessUrl] = useState("");
+  const [chessUrl, setChessUrl] = useState("");
   
   // v7.0: Position Editor
   const [editorOpen, setEditorOpen] = useState(false);
@@ -135,13 +137,15 @@ export default function Trainer() {
   const [loadRightPanel, setLoadRightPanel] = useState(false);
   const [loadGameInfo, setLoadGameInfo] = useState(false);
   const [loadAnalysisPanel, setLoadAnalysisPanel] = useState(false);
+  const workerRef = useRef<Worker | null>(null);
+  const [engineDepth, setEngineDepth] = useState(0);
 
   // proactively load secondary panels when user interacts with board area (non-visual change)
   useEffect(() => {
     const el = boardWrapperRef.current;
     if (!el) {
       // fallback: schedule idle load for non-critical panels
-      const t = window.requestIdleCallback
+      const t = typeof (window as any).requestIdleCallback === "function"
         ? (window as any).requestIdleCallback(() => {
             setLoadRightPanel(true);
             setLoadGameInfo(true);
@@ -170,6 +174,31 @@ export default function Trainer() {
     return () => {
       el.removeEventListener("mouseenter", onEnter);
       el.removeEventListener("touchstart", onEnter);
+    };
+  }, []);
+
+  // Initialize local Stockfish worker (WASM) with CDN fallback
+  useEffect(() => {
+    const w = new Worker('/engine/worker.js');
+    workerRef.current = w;
+    w.onmessage = (ev: MessageEvent<any>) => {
+      const msg = ev.data || {};
+      if (msg.type === 'info') {
+        if (typeof msg.depth === 'number') setEngineDepth(msg.depth);
+        if (msg.score !== undefined || msg.mate !== undefined || msg.best !== undefined) {
+          setCurrentAnalysis(prev => ({
+            ...(prev || ({ analysis: "" } as any)),
+            score: msg.score !== undefined ? msg.score : (prev as any)?.score,
+            mate: msg.mate !== undefined ? msg.mate : (prev as any)?.mate,
+            bestMove: msg.best !== undefined ? msg.best : (prev as any)?.bestMove,
+          }) as any);
+        }
+      }
+    };
+    return () => {
+      try { w.postMessage({ cmd: 'quit' }); } catch {}
+      w.terminate();
+      workerRef.current = null;
     };
   }, []);
 
@@ -368,6 +397,12 @@ export default function Trainer() {
           move: result.san,
           fen: newFen,
         });
+
+        // Local Stockfish worker analysis (non-blocking)
+        try {
+          const depth = window.innerWidth < 768 ? 12 : 18;
+          workerRef.current?.postMessage({ cmd: 'analyze', fen: newFen, depth, multipv: 1 });
+        } catch {}
         
         // If playing vs coach, trigger engine move
         if (isPlayVsCoach) {
@@ -624,6 +659,84 @@ export default function Trainer() {
     }
   };
 
+  // Import from Lichess URL
+  const importFromLichess = async () => {
+    const url = lichessUrl.trim();
+    if (!url) {
+      toast({ title: "URL requerida", description: "Ingresa una URL de Lichess", variant: "destructive" });
+      return;
+    }
+    try {
+      const res = await fetch('/api/games/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'url', value: url }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const game = await res.json();
+      const pgn = game.pgn || '';
+      const games = splitPgn(pgn);
+      setAvailablePgns(games);
+      setCurrentGameIndex(0);
+      chess.reset();
+      chess.loadPgn(games[0]);
+      const moves = chess.history();
+      const finalFen = chess.fen();
+      const lastMoveObj = chess.history({ verbose: true }).slice(-1)[0];
+      setGame(game);
+      setMoveHistory(moves);
+      setCurrentMove(moves.length);
+      setFen(finalFen);
+      setLastMove(lastMoveObj ? { from: lastMoveObj.from, to: lastMoveObj.to } : null);
+      setCurrentAnalysis(null);
+      setIsAnalysisMode(false);
+      setImportDialogOpen(false);
+      setLichessUrl('');
+      toast({ title: "Game Loaded (Lichess)", description: `${parsePgnMeta(pgn).white} vs ${parsePgnMeta(pgn).black}` });
+    } catch (e:any) {
+      toast({ title: "Error", description: e.message || "No se pudo cargar desde Lichess", variant: "destructive" });
+    }
+  };
+
+  // Import from Chess.com URL
+  const importFromChessCom = async () => {
+    const url = chessUrl.trim();
+    if (!url) {
+      toast({ title: "URL requerida", description: "Ingresa una URL de Chess.com", variant: "destructive" });
+      return;
+    }
+    try {
+      const res = await fetch('/api/games/import-chesscom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const game = await res.json();
+      const pgn = game.pgn || '';
+      const games = splitPgn(pgn);
+      setAvailablePgns(games);
+      setCurrentGameIndex(0);
+      chess.reset();
+      chess.loadPgn(games[0]);
+      const moves = chess.history();
+      const finalFen = chess.fen();
+      const lastMoveObj = chess.history({ verbose: true }).slice(-1)[0];
+      setGame(game);
+      setMoveHistory(moves);
+      setCurrentMove(moves.length);
+      setFen(finalFen);
+      setLastMove(lastMoveObj ? { from: lastMoveObj.from, to: lastMoveObj.to } : null);
+      setCurrentAnalysis(null);
+      setIsAnalysisMode(false);
+      setImportDialogOpen(false);
+      setChessUrl('');
+      toast({ title: "Game Loaded (Chess.com)", description: `${parsePgnMeta(pgn).white} vs ${parsePgnMeta(pgn).black}` });
+    } catch (e:any) {
+      toast({ title: "Error", description: e.message || "No se pudo cargar desde Chess.com", variant: "destructive" });
+    }
+  };
+  
   // Flip board orientation
   const handleFlipBoard = () => {
     setBoardOrientation(prev => prev === "white" ? "black" : "white");
@@ -700,7 +813,7 @@ export default function Trainer() {
     // Generate PGN with heuristic comments
     const tempChess = new Chess();
     let pgn = '[Event "GM Trainer Analysis"]\n';
-    pgn += '[Site "Replit"]\n';
+    pgn += '[Site "GM Trainer Local"]\n';
     pgn += `[Date "${new Date().toISOString().split('T')[0]}"]\n`;
     pgn += '[White "Player"]\n';
     pgn += '[Black "Player"]\n';
@@ -938,7 +1051,7 @@ export default function Trainer() {
           <DialogHeader>
             <DialogTitle>Import</DialogTitle>
             <DialogDescription>
-              Paste PGN/FEN or upload .pgn file - automatic detection
+              Paste PGN or upload .pgn file
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 pt-4">
@@ -964,16 +1077,49 @@ export default function Trainer() {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="import-input">Or Paste PGN/FEN</Label>
+              <Label htmlFor="import-input">Paste PGN</Label>
               <Textarea
                 id="import-input"
-                placeholder="[Event ...] 1. e4 e5 2. Nf3... OR rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                placeholder="[Event ...] 1. e4 e5 2. Nf3..."
                 value={importInput}
                 onChange={(e) => setImportInput((e.target as HTMLTextAreaElement).value)}
                 className="font-mono text-xs min-h-[200px]"
                 data-testid="import-textarea"
               />
             </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="lichess-url">Lichess URL</Label>
+              <Input
+                id="lichess-url"
+                type="url"
+                placeholder="https://lichess.org/..."
+                value={lichessUrl}
+                onChange={(e) => setLichessUrl((e.target as HTMLInputElement).value)}
+                className="text-sm"
+                data-testid="input-lichess-url"
+              />
+              <Button variant="secondary" onClick={importFromLichess} data-testid="button-import-lichess">
+                Load Lichess
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="chesscom-url">Chess.com URL</Label>
+              <Input
+                id="chesscom-url"
+                type="url"
+                placeholder="https://www.chess.com/game/..."
+                value={chessUrl}
+                onChange={(e) => setChessUrl((e.target as HTMLInputElement).value)}
+                className="text-sm"
+                data-testid="input-chesscom-url"
+              />
+              <Button variant="secondary" onClick={importFromChessCom} data-testid="button-import-chesscom">
+                Load Chess.com
+              </Button>
+            </div>
+
             <Button onClick={handleImport} data-testid="button-import-dialog">
               <Upload className="w-4 h-4 mr-2" />
               Import
@@ -1015,9 +1161,6 @@ export default function Trainer() {
       <UpgradeModal
         open={upgradeModalOpen}
         onOpenChange={setUpgradeModalOpen}
-        reason={upgradeModalReason}
-        currentPlan={upgradeModalCurrentPlan}
-        requiredPlan={upgradeModalRequiredPlan}
       />
     </div>
   );

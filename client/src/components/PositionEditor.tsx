@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Copy, Download, Trash2 } from "lucide-react";
+import { Download, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface PositionEditorProps {
@@ -167,11 +167,6 @@ export function PositionEditor({ open, onClose, onLoadPosition, initialFen }: Po
     return boardToFen(board, turn, castling, enPassant);
   };
 
-  const handleCopyFen = () => {
-    const fen = getCurrentFen();
-    navigator.clipboard.writeText(fen);
-    toast({ title: "FEN copiado", description: "FEN copiado al portapapeles" });
-  };
 
   const handleSaveFavorite = () => {
     const fen = getCurrentFen();
@@ -280,6 +275,8 @@ export function PositionEditor({ open, onClose, onLoadPosition, initialFen }: Po
                 ))}
                 <button
                   data-testid="piece-palette-trash"
+                  aria-label="Eliminar pieza"
+                  title="Eliminar pieza"
                   className={`
                     aspect-square flex items-center justify-center rounded-md border-2
                     ${selectedPiece === "trash" 
@@ -360,15 +357,6 @@ export function PositionEditor({ open, onClose, onLoadPosition, initialFen }: Po
               >
                 <Download className="w-4 h-4 mr-2" />
                 Cargar en tablero
-              </Button>
-              <Button 
-                onClick={handleCopyFen} 
-                variant="outline" 
-                className="w-full"
-                data-testid="editor-copy"
-              >
-                <Copy className="w-4 h-4 mr-2" />
-                Copiar FEN
               </Button>
               <Button 
                 onClick={handleSaveFavorite} 
