@@ -966,34 +966,36 @@ export default function Trainer() {
           </div>
 
           {/* Compact navigation under board */}
-          <div className="flex justify-center">
-            <MoveControls
-              currentMove={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) || 0 : Math.ceil((currentMove || 0) / 2) || 0}
-              totalMoves={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) || 0 : Math.ceil((moveHistory.length || 0) / 2) || 0}
-              isAutoPlaying={isAutoPlaying}
-              onFirst={() => {
-                if (!isAnalysisMode) goToMove(0);
-              }}
-              onPrevious={() => {
-                if (isAnalysisMode && exploratoryMoves.length > 0) {
-                  analysisModeChess.undo();
-                  setExploratoryMoves(prev => prev.slice(0, -1));
-                  setFen(analysisModeChess.fen());
-                } else if (currentMove > 0) {
-                  goToMove(currentMove - 1);
-                }
-              }}
-              onNext={() => {
-                if (!isAnalysisMode && currentMove < moveHistory.length) {
-                  goToMove(currentMove + 1);
-                }
-              }}
-              onLast={() => {
-                if (!isAnalysisMode) goToMove(moveHistory.length);
-              }}
-              onToggleAutoPlay={() => setIsAutoPlaying(!isAutoPlaying)}
-              disabled={false}
-            />
+          <div className="flex justify-center mt-2">
+            <div className="dock px-3 py-2 rounded-lg">
+              <MoveControls
+                currentMove={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) || 0 : Math.ceil((currentMove || 0) / 2) || 0}
+                totalMoves={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) || 0 : Math.ceil((moveHistory.length || 0) / 2) || 0}
+                isAutoPlaying={isAutoPlaying}
+                onFirst={() => {
+                  if (!isAnalysisMode) goToMove(0);
+                }}
+                onPrevious={() => {
+                  if (isAnalysisMode && exploratoryMoves.length > 0) {
+                    analysisModeChess.undo();
+                    setExploratoryMoves(prev => prev.slice(0, -1));
+                    setFen(analysisModeChess.fen());
+                  } else if (currentMove > 0) {
+                    goToMove(currentMove - 1);
+                  }
+                }}
+                onNext={() => {
+                  if (!isAnalysisMode && currentMove < moveHistory.length) {
+                    goToMove(currentMove + 1);
+                  }
+                }}
+                onLast={() => {
+                  if (!isAnalysisMode) goToMove(moveHistory.length);
+                }}
+                onToggleAutoPlay={() => setIsAutoPlaying(!isAutoPlaying)}
+                disabled={false}
+              />
+            </div>
           </div>
 
           {isEngineThinking && (
@@ -1099,8 +1101,8 @@ export default function Trainer() {
                 className="text-sm"
                 data-testid="input-lichess-url"
               />
-              <Button variant="secondary" onClick={importFromLichess} data-testid="button-import-lichess">
-                Load Lichess
+              <Button variant="secondary" className="btn btn-ghost" onClick={importFromLichess} data-testid="button-import-lichess">
+                Cargar Lichess
               </Button>
             </div>
 
@@ -1115,14 +1117,14 @@ export default function Trainer() {
                 className="text-sm"
                 data-testid="input-chesscom-url"
               />
-              <Button variant="secondary" onClick={importFromChessCom} data-testid="button-import-chesscom">
-                Load Chess.com
+              <Button variant="secondary" className="btn btn-ghost" onClick={importFromChessCom} data-testid="button-import-chesscom">
+                Cargar Chess.com
               </Button>
             </div>
 
-            <Button onClick={handleImport} data-testid="button-import-dialog">
+            <Button onClick={handleImport} data-testid="button-import-dialog" className="btn btn-primary">
               <Upload className="w-4 h-4 mr-2" />
-              Import
+              Cargar partida
             </Button>
           </div>
         </DialogContent>

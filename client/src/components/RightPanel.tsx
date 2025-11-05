@@ -95,7 +95,7 @@ export function RightPanel({
   const displayMoves = isAnalysisMode ? exploratoryMoves : moveHistory;
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className="panel h-full flex flex-col p-2">
       <Tabs defaultValue="analysis" className="flex-1 flex flex-col min-h-0">
         <TabsList className="mx-2 mt-2 grid w-[calc(100%-1rem)] grid-cols-5">
           <TabsTrigger value="analysis" className="text-xs" data-testid="tab-analysis">

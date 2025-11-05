@@ -1,0 +1,33 @@
+/* Layout minimal para centrado y escala del tablero y contenedores */
+.app-shell {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Contenedor del tablero centrado y con ancho máximo */
+.board-wrap {
+  margin-inline: auto;
+}
+
+/* Garantizar relación 1:1 si el contenedor no la provee */
+.board {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+/* Dock bajo el tablero con separación sutil */
+.dock {
+  margin-top: 8px;
+}
+
+/* Panel derecho: asegurar scroll interno sin barras invasivas */
+.right-panel-confined {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Compactar gaps */
+.gap-sm {
+  gap: var(--gap-sm);
+}

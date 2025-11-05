@@ -32,14 +32,14 @@ export function MoveControls({
   const isAtEnd = safeCurrentMove >= safeTotalMoves;
 
   return (
-    <div className="move-controls" data-testid="container-move-controls">
+    <div className="move-controls flex items-center gap-2" data-testid="container-move-controls">
       {/* Compact control buttons (≤40px height, gap ≤6px) */}
       <Button
         size="sm"
-        variant="outline"
+        variant="ghost"
         onClick={onFirst}
         disabled={disabled || isAtStart}
-        className="h-9 px-2"
+        className="btn btn-ghost btn-icon h-9 w-9 px-0"
         data-testid="button-first-move"
         title="First move"
       >
@@ -48,10 +48,10 @@ export function MoveControls({
       
       <Button
         size="sm"
-        variant="outline"
+        variant="ghost"
         onClick={onPrevious}
         disabled={disabled || isAtStart}
-        className="h-9 px-2"
+        className="btn btn-ghost btn-icon h-9 w-9 px-0"
         data-testid="button-previous-move"
         title="Previous move"
       >
@@ -65,10 +65,10 @@ export function MoveControls({
       
       <Button
         size="sm"
-        variant={isAutoPlaying ? "default" : "outline"}
+        variant={isAutoPlaying ? "default" : "ghost"}
         onClick={onToggleAutoPlay}
         disabled={disabled || isAtEnd}
-        className="h-9 px-2"
+        className={`btn ${isAutoPlaying ? "btn-primary" : "btn-ghost"} btn-icon h-9 w-9 px-0`}
         data-testid="button-auto-play"
         title={isAutoPlaying ? "Pause" : "Auto-play"}
       >
@@ -81,10 +81,10 @@ export function MoveControls({
       
       <Button
         size="sm"
-        variant="outline"
+        variant="ghost"
         onClick={onNext}
         disabled={disabled || isAtEnd}
-        className="h-9 px-2"
+        className="btn btn-ghost btn-icon h-9 w-9 px-0"
         data-testid="button-next-move"
         title="Next move"
       >
@@ -93,10 +93,10 @@ export function MoveControls({
       
       <Button
         size="sm"
-        variant="outline"
+        variant="ghost"
         onClick={onLast}
         disabled={disabled || isAtEnd}
-        className="h-9 px-2"
+        className="btn btn-ghost btn-icon h-9 w-9 px-0"
         data-testid="button-last-move"
         title="Last move"
       >

@@ -1,240 +1,143 @@
-/* Theme tokens and layout utilities for GMTrainer UI
-   - Colors, typography tokens, and child-mode overrides
-   - Small layout helpers for board container and responsive grid
-   - Respect prefers-reduced-motion
-*/
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
-
+/* Tema visual tipo chess.com (paleta verde/oscura, botones compactos, paneles sobrios) */
 :root {
-  /* Colors */
-  --bg: #0f1724; /* dark slate */
-  --panel: #0b1220; /* slightly darker panel */
-  --border: #233044; /* subtle border */
-  --text: #e6eef8; /* primary text */
-  --muted: #9fb0c8; /* secondary text */
-  --primary: #0ea5a1; /* teal/cyan primary */
-  --ok: #22c55e;
-  --danger: #ef4444;
+  /* Base */
+  --bg: #0a1014;              /* fondo app (más oscuro) */
+  --panel: #101821;           /* panel cards */
+  --panel-elev: #0f1b26;      /* panel elevado / hover */
+  --border: #1f2c3a;          /* bordes sutiles */
+  --text: #e9f0f6;            /* texto principal */
+  --muted: #9fb1c3;           /* texto secundario */
 
-  /* Chessboard squares */
-  --sq-light: #f1f5f9;
-  --sq-dark: #1f2937;
-  --sq-light-child: #fff7ed; /* warmer for child mode */
-  --sq-dark-child: #fde68a;
+  /* Marca (verde chess-like) */
+  --brand: #2db87b;
+  --brand-strong: #22a56d;
+  --brand-weak: #173b2b;
 
-  /* Typography */
-  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace;
+  /* Tablero clásico chess.com (verde/crema) */
+  --light: #f0d9b5;
+  --dark:  #b58863;
+  --light-green: #f0f5e8;
+  --dark-green:  #5b8c62;
 
-  /* Sizes */
-  --max-board-width: 720px;
-  --panel-width: 400px;
-  --gap: 16px;
+  /* UI */
+  --radius: 14px;
+  --gap: 12px;
+  --gap-sm: 8px;
+  --shadow: 0 6px 24px rgba(0,0,0,.35);
+  --focus: 0 0 0 2px rgba(45,184,123,.35);
 
-  /* Buttons */
-  --btn-height-mobile: 44px;
-  --btn-height: 36px;
-  --btn-radius: 8px;
-
-  /* Misc */
-  --shadow-soft: 0 6px 18px rgba(2,6,23,0.45);
-  --radius: 10px;
-  --transition-fast: 150ms ease;
+  /* Tipografía */
+  --font: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
-/* Child mode overrides (only variables changed) */
-body.child-mode {
-  --bg: #fff7ed;
-  --panel: #fff1e6;
-  --border: #ffdca8;
-  --text: #1b2733;
-  --muted: #475569;
-  --primary: #ff7a59;
-  --sq-light: var(--sq-light-child);
-  --sq-dark: var(--sq-dark-child);
-}
-
-/* Global base */
-html, body {
-  height: 100%;
+html, body, #root { height: 100%; }
+body {
   margin: 0;
-  background: linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 80%, black 10%));
+  background: linear-gradient(180deg, #0a1014 0%, #0c1318 100%);
   color: var(--text);
-  font-family: var(--font-ui);
+  font-family: var(--font);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-size: 16px;
 }
 
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
-}
-
-/* Main grid: left = board, right = panel */
-.main-grid {
-  display: grid;
-  gap: var(--gap);
-  grid-template-columns: 1fr var(--panel-width);
-  align-items: start;
-  padding: var(--gap);
-  box-sizing: border-box;
-}
-
-/* Responsive: single column on smaller screens */
-@media (max-width: 1024px) {
-  .main-grid {
-    grid-template-columns: 1fr;
-    padding: 12px;
-  }
-}
-
-/* Board container */
-.board-wrap {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-}
-
-/* Square board responsive sizing */
-.board {
-  width: min(var(--max-board-width), 95vw);
-  max-width: var(--max-board-width);
-  aspect-ratio: 1 / 1;
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: var(--shadow-soft);
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
-  /* ensure the board content centers */
-  display: grid;
-  place-items: center;
-}
-
-/* Panel card style */
-.box {
-  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
-  border: 1px solid var(--border);
-  padding: 12px;
-  border-radius: 10px;
-  box-sizing: border-box;
-  color: var(--text);
-}
-
-/* Panel right tweaks */
-.right-panel {
-  width: 100%;
-  max-width: var(--panel-width);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* Ensure PV/lines (principal variation) use monospace and ellipsize */
-.pv-lines {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--muted);
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Move controls/button group compact layout */
-.move-controls {
-  display: flex;
-  gap: 6px;
-  flex-wrap: nowrap;
-  align-items: center;
-  justify-content: center;
-}
-
-.move-controls button {
-  height: var(--btn-height);
-  min-width: 44px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
-}
-
-.move-controls button:focus,
-.move-controls button:hover {
-  outline: 2px solid color-mix(in srgb, var(--primary) 40%, transparent);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-soft);
-}
-
-/* Primary button */
-.btn-primary {
-  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 75%, black 5%));
-  color: black;
-  border: none;
-}
-
-/* Ghost button */
-.btn-ghost {
-  background: transparent;
-  border: 1px dashed color-mix(in srgb, var(--muted) 50%, transparent);
-}
-
-/* Mobile dock: sticky bottom with 5 buttons */
-.mobile-dock {
-  position: sticky;
-  bottom: 8px;
-  display: none;
-  gap: 8px;
-  padding: 8px;
-  justify-content: center;
-  z-index: 40;
-}
-
-@media (max-width: 1024px) {
-  .mobile-dock {
-    display: flex;
-    background: rgba(0,0,0,0.3);
-    padding: 8px 12px;
-    border-radius: 999px;
-    margin: 0 auto;
-    max-width: 720px;
-  }
-  .mobile-dock button {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-  }
-}
-
-/* Accessibility helpers */
-.sr-only {
-  position: absolute !important;
-  height: 1px; width: 1px;
-  overflow: hidden; clip: rect(1px, 1px, 1px, 1px);
-  white-space: nowrap;
-}
-
-/* Header indicator for child/adult mode */
-.mode-indicator {
-  position: absolute;
-  top: 12px;
-  right: 12px;
+/* Panels */
+.panel {
   background: var(--panel);
   border: 1px solid var(--border);
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 13px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.panel:hover { background: var(--panel-elev); }
+
+/* Botones primarios/ secundarios compactos */
+.btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid #28415a;
+  background: #122334;
   color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  gap: 8px;
+  transition: transform .06s ease, filter .12s ease, background-color .12s ease;
+  text-decoration: none;
+}
+.btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn:focus-visible { outline: none; box-shadow: var(--focus); }
+
+.btn-primary {
+  background: var(--brand-strong);
+  border-color: #1b7a55;
+  color: #041c12;
+  font-weight: 700;
+}
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--muted);
+}
+.btn-icon { width: 36px; padding: 0; }
+
+/* Dock bajo el tablero */
+.dock {
+  background: rgba(10,16,20,.7);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
-/* Utilities */
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 8px;
-  box-sizing: border-box;
+/* Títulos/etiquetas */
+.h1 { font-size: 20px; font-weight: 800; letter-spacing: .2px; }
+.h2 { font-size: 16px; font-weight: 700; color: var(--muted); }
+
+/* Inputs */
+.input, .select, .textarea {
+  background: #0f1a24;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
 }
+.input:focus-visible, .select:focus-visible, .textarea:focus-visible {
+  outline: none; box-shadow: var(--focus);
+}
+
+/* Badges para valores importantes (Eval, depth) */
+.badge {
+  background: #0f2a1f;
+  color: #9fe7c7;
+  border: 1px solid #1e6e4e;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+}
+
+/* Estilo tablero tipo chess.com (si el tablero usa divs con .square) */
+.board-wrap .square.light { background: var(--light-green); }
+.board-wrap .square.dark  { background: var(--dark-green); }
+.board-wrap .last-move { outline: 3px solid rgba(45,184,123,.55); }
+.board-wrap .legal-dot { background: radial-gradient(circle, rgba(45,184,123,.9) 0 30%, transparent 31% 100%); }
+.board-wrap .capture-ring { outline: 3px solid rgba(231, 76, 60, .75); }
+
+/* Topbar “modo pro” (si aplica en el header) */
+.topbar-pro {
+  background: var(--brand-weak);
+  color: #d0f5e4;
+  border: 1px solid #235941;
+  height: 44px;
+}
+
+/* Reset de toolbars/controles para evitar solapes/absolute */
+[data-controls], .toolbar, .controls { position: static !important; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .dock { border-radius: 10px; }
+}
+
+/* Utilidades opcionales */
+.max-w-board { max-width: 720px; margin-inline: auto; }
