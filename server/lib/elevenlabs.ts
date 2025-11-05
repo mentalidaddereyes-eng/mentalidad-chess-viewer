@@ -4,9 +4,20 @@
 import { ElevenLabsClient } from "elevenlabs";
 import { ttsCache, getTTSCacheKey } from "./cache";
 
-const elevenlabs = new ElevenLabsClient({
-  apiKey: process.env.ELEVENLABS_API_KEY,
-});
+/**
+ * Lazily create ElevenLabs client to avoid throwing at module import time
+ * when ELEVENLABS_API_KEY is not configured (development environments).
+ */
+const getElevenLabsClient = () => {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) return null;
+  try {
+    return new ElevenLabsClient({ apiKey });
+  } catch (e) {
+    console.warn('[elevenlabs] failed to create client:', e);
+    return null;
+  }
+};
 
 export type VoiceMode = 'pro' | 'kids';
 export type Language = 'spanish' | 'english' | 'portuguese' | 'hindi' | 'french' | 'german' | 'russian';
@@ -57,9 +68,11 @@ export async function textToSpeech(
   voiceMode: VoiceMode = 'pro',
   language: Language = 'spanish' // HOTFIX v6.1: Spanish default
 ): Promise<Buffer> {
-  // HOTFIX v6.1: Verify API key exists
-  if (!process.env.ELEVENLABS_API_KEY) {
-    throw new Error('ELEVENLABS_API_KEY not configured');
+  // HOTFIX v6.1: Lazily obtain ElevenLabs client; if not configured, return an empty buffer so server can run in dev
+  const elevenlabs = getElevenLabsClient();
+  if (!elevenlabs) {
+    console.warn('[voice] ELEVENLABS_API_KEY not configured - returning empty audio buffer');
+    return Buffer.alloc(0);
   }
   
   // Check cache first (low-cost optimization) - Cost Saver Pack v6.0: includes provider
@@ -107,7 +120,12 @@ export async function textToSpeech(
 
 export async function getVoices() {
   try {
-    const voices = await elevenlabs.voices.getAll();
+    const client = getElevenLabsClient();
+    if (!client) {
+      console.warn('[voice] ELEVENLABS_API_KEY not configured - getVoices returning empty list');
+      return [];
+    }
+    const voices = await client.voices.getAll();
     return voices.voices;
   } catch (error) {
     console.error("ElevenLabs get voices error:", error);

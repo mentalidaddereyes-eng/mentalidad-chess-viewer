@@ -89,16 +89,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
+      // Determine plan for this analysis (feat/subscriptions)
+      const planMode: PlanMode = (req.query.plan as PlanMode) || 'free';
+      const engineDepths = {
+        free: parseInt(process.env.ENGINE_DEPTH_FREE || '14', 10),
+        pro: parseInt(process.env.ENGINE_DEPTH_PRO || '20', 10),
+        elite: parseInt(process.env.ENGINE_DEPTH_ELITE || '24', 10),
+      };
+      const engineDepth = engineDepths[planMode] || engineDepths.free;
+
       // Try to get engine evaluation first (used for context in GPT commentary)
       let engineEval: { score?: number; mate?: number; bestMove?: string } | undefined;
       try {
         engineEval = await Promise.race([
-          getStockfishEvaluation(fen, 10), // Depth 10 for reasonable speed
+          getStockfishEvaluation(fen, engineDepth), // Plan-aware depth (feat/subscriptions)
           new Promise<never>((_, reject) => 
             setTimeout(() => reject(new Error("Stockfish timeout")), 12000)
           )
         ]);
-        console.log("[coach] Stockfish eval:", engineEval);
+        console.log(`[coach] Stockfish eval (depth ${engineDepth}, plan ${planMode}):`, engineEval);
       } catch (engineError) {
         console.log("[coach] Stockfish skipped:", engineError);
         // Continue without engine evaluation
@@ -633,7 +642,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate request with Zod schema
       const stockfishRequestSchema = z.object({
         fen: z.string().min(1, "FEN string cannot be empty"),
-        depth: z.coerce.number().int().min(1).max(20).default(15),
+        depth: z.coerce.number().int().min(1).max(24).default(15),
       });
       
       const validated = stockfishRequestSchema.parse(req.body);
@@ -646,6 +655,246 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Stockfish analysis error:", error);
       res.status(500).json({ error: error.message || "Failed to analyze position" });
+    }
+  });
+
+  //
+  // Lightweight subscription + trial endpoints (feat/subscriptions)
+  //
+  const TRIAL_STORE_PATH = path.join(process.cwd(), 'attached_assets', 'trial-store.json');
+  const USAGE_STORE_PATH = path.join(process.cwd(), 'attached_assets', 'usage-store.json');
+
+  async function readJsonFileSafe(p: string) {
+    try {
+      const raw = await fs.promises.readFile(p, 'utf-8');
+      return JSON.parse(raw);
+    } catch (e) {
+      return {};
+    }
+  }
+
+  async function writeJsonFileSafe(p: string, data: any) {
+    try {
+      await fs.promises.mkdir(path.dirname(p), { recursive: true });
+      await fs.promises.writeFile(p, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+      console.warn('[subscriptions] failed to persist file', p, e);
+    }
+  }
+
+  function getClientId(req: any) {
+    // Prefer authenticated user id if present (future); fallback to IP
+    const userId = (req as any).user?.id;
+    if (userId) return `user:${userId}`;
+    // Express provides req.ip (may include ::ffff:), normalize
+    return `ip:${req.ip || req.socket?.remoteAddress || 'anon'}`;
+  }
+
+  function getTodayKey() {
+    const tz = process.env.TZ || 'America/Chicago';
+    return new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD (en-CA)
+  }
+
+  // Concurrent analysis tracking (in-memory)
+  const concurrentMap = new Map<string, number>();
+
+  // Helper to increment telemetry
+  async function incrementUsage(clientId: string, fields: Partial<{ stockfishCalls: number; llmCalls: number; ttsSeconds: number; }>) {
+    const usage = await readJsonFileSafe(USAGE_STORE_PATH);
+    const day = getTodayKey();
+    usage[day] = usage[day] || {};
+    usage[day][clientId] = usage[day][clientId] || { stockfishCalls: 0, llmCalls: 0, ttsSeconds: 0 };
+    const rec = usage[day][clientId];
+    if (fields.stockfishCalls) rec.stockfishCalls += fields.stockfishCalls;
+    if (fields.llmCalls) rec.llmCalls += fields.llmCalls;
+    if (fields.ttsSeconds) rec.ttsSeconds += fields.ttsSeconds;
+    await writeJsonFileSafe(USAGE_STORE_PATH, usage);
+  }
+
+  // GET /api/plan -> returns plan + trial eligibility
+  app.get("/api/plan", async (req, res) => {
+    try {
+      const planQuery = (req.query.plan as string) || process.env.DEFAULT_PLAN || 'FREE';
+      const plan = String(planQuery).toLowerCase() === 'pro' ? 'pro' : (String(planQuery).toLowerCase() === 'elite' ? 'elite' : 'free');
+
+      const tz = process.env.TZ || 'America/Chicago';
+      const today = getTodayKey();
+
+      const store = await readJsonFileSafe(TRIAL_STORE_PATH);
+      const clientId = getClientId(req);
+      const entry = store[clientId] || { date: null, used: false, usedAt: null, usedDurationMs: 0 };
+
+      const trialEnabled = (process.env.TRIAL_ENABLED || 'true') === 'true';
+      const trialDurationMin = parseInt(process.env.TRIAL_DURATION_MIN || '3', 10);
+
+      let eligible = false;
+      let remainingMs = 0;
+      let usedToday = false;
+
+      if (!trialEnabled) {
+        eligible = false;
+        usedToday = !!(entry.date === today && entry.used);
+      } else {
+        if (entry.date !== today || !entry.used) {
+          eligible = true;
+          usedToday = false;
+        } else {
+          usedToday = true;
+          // compute remaining if within duration
+          const usedAt = entry.usedAt ? new Date(entry.usedAt).getTime() : 0;
+          const elapsed = Date.now() - usedAt;
+          const allowedMs = (trialDurationMin || 3) * 60 * 1000;
+          remainingMs = Math.max(0, allowedMs - elapsed);
+          if (remainingMs > 0) eligible = true;
+          else eligible = false;
+        }
+      }
+
+      res.json({
+        plan,
+        trial: {
+          eligible,
+          remainingMs,
+          usedToday,
+        },
+      });
+    } catch (error: any) {
+      console.error("[subscriptions] GET /api/plan error:", error);
+      res.status(500).json({ error: "Failed to fetch plan" });
+    }
+  });
+
+  // Simple usage endpoint
+  app.get("/api/usage/today", async (req, res) => {
+    try {
+      const usage = await readJsonFileSafe(USAGE_STORE_PATH);
+      const day = getTodayKey();
+      res.json({ day, usage: usage[day] || {} });
+    } catch (error: any) {
+      console.error("[subscriptions] GET /api/usage error:", error);
+      res.status(500).json({ error: "Failed to fetch usage" });
+    }
+  });
+
+  // POST /api/analyze -> Select model/depth based on plan, support FREE trial one PRO analysis/day
+  app.post("/api/analyze", async (req, res) => {
+    const body = req.body || {};
+    const fen = body.fen;
+    if (!fen) {
+      return res.status(400).json({ error: "Missing FEN" });
+    }
+
+    // Determine client / plan
+    const planQuery = (req.query.plan as string) || process.env.DEFAULT_PLAN || 'FREE';
+    const plan = String(planQuery).toLowerCase() === 'pro' ? 'pro' : (String(planQuery).toLowerCase() === 'elite' ? 'elite' : 'free');
+
+    const clientId = getClientId(req);
+    const today = getTodayKey();
+
+    // Concurrency limits
+    const limits = {
+      free: parseInt(process.env.MAX_CONCURRENT_ANALYSIS_FREE || '1', 10),
+      pro: parseInt(process.env.MAX_CONCURRENT_ANALYSIS_PRO || '2', 10),
+      elite: parseInt(process.env.MAX_CONCURRENT_ANALYSIS_ELITE || '3', 10),
+    };
+    const allowedConcurrent = limits[plan as keyof typeof limits] || 1;
+    const currentConcurrent = concurrentMap.get(clientId) || 0;
+    if (currentConcurrent >= allowedConcurrent) {
+      return res.status(429).json({ error: "Too many concurrent analyses" });
+    }
+
+    concurrentMap.set(clientId, currentConcurrent + 1);
+
+    try {
+      // Read trial store
+      const store = await readJsonFileSafe(TRIAL_STORE_PATH);
+      // entry shape: { date: YYYY-MM-DD, used: boolean, usedAt: ISOString, usedCount: number }
+      const entry = store[clientId] || { date: null, used: false, usedAt: null, usedCount: 0 };
+
+      const trialEnabled = (process.env.TRIAL_ENABLED || 'true') === 'true';
+      const trialDurationMin = parseInt(process.env.TRIAL_DURATION_MIN || '3', 10);
+      const trialModel = process.env.TRIAL_MODEL || process.env.MODEL_PRO || 'gemini-2.5-flash';
+      const trialDepth = parseInt(process.env.TRIAL_ENGINE_DEPTH || String(process.env.ENGINE_DEPTH_PRO || '22'), 10);
+
+      const engineDepths = {
+        free: parseInt(process.env.ENGINE_DEPTH_FREE || '14', 10),
+        pro: parseInt(process.env.ENGINE_DEPTH_PRO || '20', 10),
+        elite: parseInt(process.env.ENGINE_DEPTH_ELITE || '24', 10),
+      };
+
+      // Decide requested depth: body.depth or plan default
+      const requestedDepth = body.depth ? Number(body.depth) : engineDepths[plan as keyof typeof engineDepths];
+      const isProDepthRequested = requestedDepth > engineDepths.free;
+
+      // Check trial eligibility for FREE requesting PRO depth
+      // RULE: FREE users get at most ONE PRO analysis per day (trial). Duration window also exists,
+      // but the trial is consumed by a single PRO analysis (3 minutes or 1 analysis, whichever first).
+      let usingTrial = false;
+      if (plan === 'free' && trialEnabled && isProDepthRequested) {
+        if (entry.date !== today || !entry.used) {
+          // Not used today -> allow ONE trial analysis
+          usingTrial = true;
+        } else {
+          // Already consumed trial today -> deny immediately
+          return res.status(402).json({ reason: "TRIAL_ENDED", message: "Trial used for today. Upgrade to PRO to continue." });
+        }
+      }
+
+      // Select model and depth
+      let model = process.env.MODEL_FREE || 'gemini-2.5-flash-lite';
+      let depth = engineDepths.free;
+
+      if (plan === 'pro') {
+        model = process.env.MODEL_PRO || model;
+        depth = engineDepths.pro;
+      } else if (plan === 'elite') {
+        model = process.env.MODEL_ELITE || model;
+        depth = engineDepths.elite;
+      }
+
+      if (usingTrial) {
+        model = trialModel;
+        depth = trialDepth;
+      } else if (body.model) {
+        model = body.model;
+      }
+      // If body.depth explicitly provided, override (but still subject to trial checks)
+      if (body.depth) {
+        depth = Number(body.depth);
+      }
+
+      // Telemetry: note one stockfish call
+      await incrementUsage(clientId, { stockfishCalls: 1 });
+
+      // Perform the engine evaluation (use existing helper)
+      const evaluation = await getStockfishEvaluation(fen, depth);
+
+      // If using trial, mark trial as used (store usedAt and increment usedCount)
+      if (usingTrial) {
+        const prev = store[clientId] || {};
+        store[clientId] = { 
+          date: today, 
+          used: true, 
+          usedAt: new Date().toISOString(),
+          usedCount: (prev.usedCount ? Number(prev.usedCount) + 1 : 1)
+        };
+        await writeJsonFileSafe(TRIAL_STORE_PATH, store);
+      }
+
+      res.json({
+        plan,
+        model,
+        depth,
+        evaluation,
+        trialUsed: !!usingTrial,
+      });
+    } catch (error: any) {
+      console.error("[subscriptions] POST /api/analyze error:", error);
+      res.status(500).json({ error: "Analyze failed" });
+    } finally {
+      // decrement concurrent
+      const now = concurrentMap.get(clientId) || 1;
+      concurrentMap.set(clientId, Math.max(0, now - 1));
     }
   });
 

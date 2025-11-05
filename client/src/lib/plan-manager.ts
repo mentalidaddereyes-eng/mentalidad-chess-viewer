@@ -11,30 +11,30 @@ const COOKIE_TTL_DAYS = 7;
  * Get current plan mode from query param → cookie → localStorage → 'free'
  */
 export function getPlanMode(): PlanMode {
-  // 1. Check query parameter (?plan=pro|free)
+  // 1. Check query parameter (?plan=pro|free|elite)
   if (typeof window !== 'undefined') {
     const urlParams = new URLSearchParams(window.location.search);
     const planParam = urlParams.get('plan');
-    if (planParam === 'pro' || planParam === 'free') {
+    if (planParam === 'pro' || planParam === 'free' || planParam === 'elite') {
       // Save to cookie and localStorage
-      setPlanMode(planParam);
-      return planParam;
+      setPlanMode(planParam as PlanMode);
+      return planParam as PlanMode;
     }
   }
 
   // 2. Check cookie
   const cookiePlan = getCookie(PLAN_COOKIE_NAME);
-  if (cookiePlan === 'pro' || cookiePlan === 'free') {
-    return cookiePlan;
+  if (cookiePlan === 'pro' || cookiePlan === 'free' || cookiePlan === 'elite') {
+    return cookiePlan as PlanMode;
   }
 
   // 3. Check localStorage
   if (typeof window !== 'undefined') {
     const storedPlan = localStorage.getItem(PLAN_STORAGE_KEY);
-    if (storedPlan === 'pro' || storedPlan === 'free') {
+    if (storedPlan === 'pro' || storedPlan === 'free' || storedPlan === 'elite') {
       // Sync to cookie
       setCookie(PLAN_COOKIE_NAME, storedPlan, COOKIE_TTL_DAYS);
-      return storedPlan;
+      return storedPlan as PlanMode;
     }
   }
 

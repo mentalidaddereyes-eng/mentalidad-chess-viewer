@@ -24,8 +24,12 @@ export function MoveControls({
   onToggleAutoPlay,
   disabled = false,
 }: MoveControlsProps) {
-  const isAtStart = currentMove === 0;
-  const isAtEnd = currentMove >= totalMoves;
+  // Ensure values are valid numbers (fix for React 14 "can't convert item to string" error)
+  const safeCurrentMove = Number.isFinite(currentMove) ? Math.max(0, Math.floor(currentMove)) : 0;
+  const safeTotalMoves = Number.isFinite(totalMoves) ? Math.max(0, Math.floor(totalMoves)) : 0;
+  
+  const isAtStart = safeCurrentMove === 0;
+  const isAtEnd = safeCurrentMove >= safeTotalMoves;
 
   return (
     <div className="flex items-center justify-center gap-1 mt-1 mb-2" data-testid="container-move-controls">
@@ -56,7 +60,7 @@ export function MoveControls({
       
       {/* Move counter (compact) */}
       <div className="text-xs font-mono px-3 text-muted-foreground" data-testid="text-move-counter">
-        {currentMove}/{totalMoves}
+        {safeCurrentMove}/{safeTotalMoves}
       </div>
       
       <Button

@@ -1,6 +1,18 @@
 import { type Game, type InsertGame, type MoveAnalysis, type InsertMoveAnalysis, type UserSettings, type InsertUserSettings, type Puzzle, type InsertPuzzle, type PuzzleAttempt, type InsertPuzzleAttempt, games, moveAnalyses, userSettings, puzzles, puzzleAttempts } from "@shared/schema";
-import { db } from "./db";
 import { eq, and } from "drizzle-orm";
+
+/**
+ * Lazily import the DB module at runtime so the server can start even if
+ * DATABASE_URL is not set. Methods will call getDb() which will attempt to
+ * dynamically import './db' and return the `db` instance.
+ */
+let _db: any | null = null;
+const getDb = async () => {
+  if (_db) return _db;
+  const mod = await import('./db');
+  _db = mod.db;
+  return _db;
+};
 
 export interface IStorage {
   // Game storage
@@ -36,21 +48,21 @@ export interface IStorage {
 
 export class DbStorage implements IStorage {
   async getGame(id: number): Promise<Game | undefined> {
-    const result = await db.select().from(games).where(eq(games.id, id)).limit(1);
+    const result = await (await getDb()).select().from(games).where(eq(games.id, id)).limit(1);
     return result[0];
   }
 
   async createGame(insertGame: InsertGame): Promise<Game> {
-    const result = await db.insert(games).values(insertGame).returning();
+    const result = await (await getDb()).insert(games).values(insertGame).returning();
     return result[0];
   }
 
   async getAllGames(): Promise<Game[]> {
-    return await db.select().from(games).orderBy(games.createdAt);
+    return await (await getDb()).select().from(games).orderBy(games.createdAt);
   }
 
   async getMoveAnalysis(gameId: number, moveNumber: number): Promise<MoveAnalysis | undefined> {
-    const result = await db
+    const result = await (await getDb())
       .select()
       .from(moveAnalyses)
       .where(and(eq(moveAnalyses.gameId, gameId), eq(moveAnalyses.moveNumber, moveNumber)))
@@ -59,12 +71,12 @@ export class DbStorage implements IStorage {
   }
 
   async saveMoveAnalysis(analysis: InsertMoveAnalysis): Promise<MoveAnalysis> {
-    const result = await db.insert(moveAnalyses).values(analysis).returning();
+    const result = await (await getDb()).insert(moveAnalyses).values(analysis).returning();
     return result[0];
   }
 
   async getGameAnalyses(gameId: number): Promise<MoveAnalysis[]> {
-    return await db
+    return await (await getDb())
       .select()
       .from(moveAnalyses)
       .where(eq(moveAnalyses.gameId, gameId))
@@ -73,7 +85,7 @@ export class DbStorage implements IStorage {
 
   async getSettings(): Promise<UserSettings | undefined> {
     // Get the first settings record (global settings for now)
-    const result = await db.select().from(userSettings).limit(1);
+    const result = await (await getDb()).select().from(userSettings).limit(1);
     return result[0];
   }
 
@@ -83,7 +95,7 @@ export class DbStorage implements IStorage {
     
     if (existing) {
       // Update existing settings
-      const result = await db
+      const result = await (await getDb())
         .update(userSettings)
         .set({ ...settings, updatedAt: new Date() })
         .where(eq(userSettings.id, existing.id))
@@ -91,7 +103,7 @@ export class DbStorage implements IStorage {
       return result[0];
     } else {
       // Create new settings record
-      const result = await db
+      const result = await (await getDb())
         .insert(userSettings)
         .values({
           userId: null,
@@ -107,7 +119,7 @@ export class DbStorage implements IStorage {
 
   async getAllPuzzles(filters?: { minRating?: number; maxRating?: number; themes?: string[] }): Promise<Puzzle[]> {
     // Get all puzzles
-    const allPuzzles = await db.select().from(puzzles).orderBy(puzzles.rating);
+    const allPuzzles = await (await getDb()).select().from(puzzles).orderBy(puzzles.rating);
     
     // If no filters, return all
     if (!filters) {
@@ -132,22 +144,22 @@ export class DbStorage implements IStorage {
   }
 
   async getPuzzle(id: number): Promise<Puzzle | undefined> {
-    const result = await db.select().from(puzzles).where(eq(puzzles.id, id)).limit(1);
+    const result = await (await getDb()).select().from(puzzles).where(eq(puzzles.id, id)).limit(1);
     return result[0];
   }
 
   async createPuzzle(puzzle: InsertPuzzle): Promise<Puzzle> {
-    const result = await db.insert(puzzles).values(puzzle).returning();
+    const result = await (await getDb()).insert(puzzles).values(puzzle).returning();
     return result[0];
   }
 
   async createPuzzleAttempt(attempt: InsertPuzzleAttempt): Promise<PuzzleAttempt> {
-    const result = await db.insert(puzzleAttempts).values(attempt).returning();
+    const result = await (await getDb()).insert(puzzleAttempts).values(attempt).returning();
     return result[0];
   }
 
   async getPuzzleAttempts(puzzleId: number): Promise<PuzzleAttempt[]> {
-    return await db
+    return await (await getDb())
       .select()
       .from(puzzleAttempts)
       .where(eq(puzzleAttempts.puzzleId, puzzleId))
@@ -155,7 +167,7 @@ export class DbStorage implements IStorage {
   }
 
   async getAllPuzzleAttempts(): Promise<PuzzleAttempt[]> {
-    return await db
+    return await (await getDb())
       .select()
       .from(puzzleAttempts)
       .orderBy(puzzleAttempts.attemptedAt);

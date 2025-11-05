@@ -1,4 +1,4 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -207,11 +207,15 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
   }
 }
 
@@ -326,7 +330,7 @@
     inset: -1px;
   }
 
-  /* Mobile UI improvements - Commit A: Layout móvil PRO */
+  /* Mobile UI improvements - Commit A: Layout mÃ³vil PRO */
   
   /* Ensure minimum touch target size for buttons on mobile */
   @media (max-width: 768px) {
@@ -450,7 +454,7 @@
     margin: 0 auto;
   }
   
-  /* Anti-scroll: Límite para contenedores de análisis y historial */
+  /* Anti-scroll: LÃ­mite para contenedores de anÃ¡lisis y historial */
   .confined-scroll {
     max-height: 40vh;
     overflow-y: auto;
@@ -469,3 +473,9 @@
     }
   }
 }
+
+@layer components { .border-border { border-color: hsl(var(--border)); } }
+
+
+
+

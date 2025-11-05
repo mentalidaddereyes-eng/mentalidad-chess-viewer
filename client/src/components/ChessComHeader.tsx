@@ -1,5 +1,5 @@
-import { Trophy, Volume2, VolumeX, History, Target, Settings } from "lucide-react";
-import { Link } from "wouter";
+import { Trophy, Volume2, VolumeX, History, Target, Settings, Crown } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { GameLoader } from "@/components/GameLoader";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -96,6 +96,23 @@ export function ChessComHeader({
                   <span className="hidden lg:inline">Settings</span>
                 </Button>
               </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                data-testid="button-upgrade-plan"
+                onClick={() => {
+                  if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+                    window.dispatchEvent(new CustomEvent("open-upgrade-modal"));
+                  } else {
+                    // fallback navigation
+                    window.location.href = "/upgrade";
+                  }
+                }}
+              >
+                <Crown className="w-4 h-4 mr-1" />
+                <span className="hidden lg:inline">Mejorar Plan</span>
+              </Button>
               <GameLoader 
                 onGameLoad={onGameLoad}
                 isLoading={isLoading}

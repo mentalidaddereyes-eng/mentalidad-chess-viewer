@@ -4,7 +4,7 @@
 import { textToSpeech as elevenLabsTTS, type VoiceMode, type Language } from './elevenlabs';
 import { generateGTTS } from './gtts';
 import { ttsCache, getTTSCacheKey } from './cache';
-import type { VoiceProvider } from '@shared/types';
+import type { VoiceProvider, PlanMode } from '@shared/types';
 
 const ELEVENLABS_TIMEOUT_MS = 2000; // Cost Saver Pack v6.0: fallback if >2s
 
@@ -82,20 +82,21 @@ export async function generateSpeech(
  * - Pro plan: Try ElevenLabs if API key exists, else fallback to gTTS
  * - Free plan: Always use gTTS
  */
-export function getTTSProvider(planMode: 'pro' | 'free'): VoiceProvider {
+export function getTTSProvider(planMode: PlanMode): VoiceProvider {
+  // Map elite -> pro behavior (elite uses elevenlabs when available)
   if (planMode === 'free') {
     console.log('[voice] provider=free reason=free_plan');
     return 'gtts';
   }
   
-  // Pro plan: Check if ElevenLabs API key exists
+  // For 'pro' and 'elite' try ElevenLabs if API key exists
   const hasApiKey = !!process.env.ELEVENLABS_API_KEY;
   
   if (!hasApiKey) {
-    console.log('[voice] provider=free reason=missing_elevenlabs_key (fallback from pro)');
+    console.log(`[voice] provider=free reason=missing_elevenlabs_key (fallback from ${planMode})`);
     return 'gtts';
   }
   
-  console.log('[voice] provider=pro reason=ok');
+  console.log(`[voice] provider=elevenlabs reason=ok plan=${planMode}`);
   return 'elevenlabs';
 }

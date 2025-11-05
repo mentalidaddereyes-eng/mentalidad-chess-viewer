@@ -5,8 +5,20 @@ import OpenAI from "openai";
 import { getLocalTemplate } from "./cache";
 import { gptMemo, isTrivialPosition } from "./gpt-memo";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+/**
+ * Lazily initialize OpenAI client. Avoid constructing the client at module
+ * import time so the server can start without OPENAI_API_KEY in development.
+ */
+const getOpenAIClient = () => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+  try {
+    return new OpenAI({ apiKey });
+  } catch (e) {
+    console.warn('[openai] failed to create client:', e);
+    return null;
+  }
+};
 
 // Debounce map for GPT requests (400ms budget)
 const gptDebounceMap = new Map<string, { timer: NodeJS.Timeout; resolve: (value: any) => void; reject: (error: any) => void }[]>();
@@ -70,29 +82,29 @@ export async function getGPTComment(params: {
 
   const bestSan = bestMove || '';
 
-  // 1. Check local templates first (Cost Saver Pack v6.0)
+  // 1. Check local templates first (Cost Saver v6.0)
   const localTemplate = getLocalTemplate(fen, language, voiceMode);
   if (localTemplate) {
     console.log('[gpt] local template used (no GPT call)');
     return { text: localTemplate };
   }
 
-  // 2. Check trivial positions (Cost Saver Pack v6.0: no GPT needed)
+  // 2. Check trivial positions (no GPT needed)
   if (isTrivialPosition(fen, bestSan, score, mate)) {
-    const trivialFallback = voiceMode === 'kids' 
+    const trivialFallback = voiceMode === 'kids'
       ? 'This position is clear! Follow the best move.'
       : 'The position evaluation is straightforward. Execute the indicated continuation.';
     console.log('[gpt] trivial position detected, using fallback');
     return { text: trivialFallback };
   }
 
-  // 3. Check GPT memo (Cost Saver Pack v6.0: hash-based with TTL 180-300s)
+  // 3. Check GPT memo (hash-based with TTL)
   const memoHit = gptMemo.get(fen, language, voiceMode, bestSan);
   if (memoHit) {
     return { text: memoHit };
   }
 
-  // 4. Check rate limit (Cost Saver Pack v6.0: max 2/min, burst 1/3s)
+  // 4. Rate limit check
   if (!gptMemo.canMakeGPTCall()) {
     const rateLimitFallback = voiceMode === 'kids'
       ? 'Great moves! Keep thinking carefully about each position.'
@@ -104,8 +116,7 @@ export async function getGPTComment(params: {
   const languageInstruction = getLanguageInstruction(language);
   const styleInstruction = getStyleInstruction(coachingStyle);
 
-  // Adjust vocabulary based on voice mode
-  const vocabularyLevel = voiceMode === 'kids' 
+  const vocabularyLevel = voiceMode === 'kids'
     ? 'Use simple, friendly language suitable for young students. Avoid complex chess terminology.'
     : 'Use professional Grand Master terminology. You may use advanced concepts like zugzwang, prophylaxis, initiative.';
 
@@ -149,52 +160,52 @@ CRITICAL RULES:
 - Be motivating, analytical, and educational
 - Focus on IDEAS, PLANS, and CONCEPTS
 - Teach WHY moves are good or bad, not HOW MUCH better they are numerically
+`;
 
-Example GOOD responses:
-"White controls the center nicely with the pawns on e4 and d4. The knight on f3 is well-placed to support kingside development. Consider castling soon to ensure king safety."
-
-Example BAD responses (NEVER DO THIS):
-"White is +0.43 better. The evaluation is +0.89 after Nf3." ❌
-"Black is down -1.2 material" ❌`;
-
-  // 5. Make GPT call (Cost Saver Pack v6.0: record for rate limiting)
+  // 5. Make GPT call (record for rate limiting)
   gptMemo.recordGPTCall();
-  
+
+  const openai = getOpenAIClient();
+  if (!openai) {
+    console.warn('[openai] OPENAI_API_KEY not set - returning fallback comment');
+    const fallback = voiceMode === 'kids'
+      ? 'This is an interesting position! Keep practicing and focus on development and king safety.'
+      : 'This position is instructive. Consider piece coordination and candidate moves; try to improve piece activity.';
+    gptMemo.set(fen, language, voiceMode, bestSan, fallback);
+    return { text: fallback };
+  }
+
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-5",
       messages: [
         {
           role: "system",
-          content: `You are a Doctor in Sports Science and Chess Training (PhD). You combine deep chess knowledge from Lichess and Chess.com with pedagogical expertise. ${styleInstruction} ${vocabularyLevel} NEVER use numeric evaluations in your explanations. ${languageInstruction}.`,
+          content: `You are a Doctor in Sports Science and Chess Training (PhD). ${styleInstruction} ${vocabularyLevel} NEVER use numeric evaluations in your explanations. ${languageInstruction}.`,
         },
         {
           role: "user",
           content: prompt,
         },
       ],
-      max_completion_tokens: 200, // Cost Saver Pack v6.0: reduced from 250 to 200
+      max_completion_tokens: 200,
     });
 
-    let text = response.choices[0].message.content || "Let's analyze this interesting position together.";
-    
-    // Safety filter: Remove any numeric evaluations that slipped through
+    let text = response.choices?.[0]?.message?.content || "Let's analyze this interesting position together.";
+
+    // Safety filter: Remove numeric evaluations
     text = text
       .replace(/[+\-±]?\d+\.?\d*\s*(pawns?|centipawns?|cp|evaluation|eval)/gi, 'advantage')
       .replace(/[+\-±]\d+\.?\d*/g, '')
       .trim();
-    
-    // Cost Saver Pack v6.0: Truncate to max 200 chars
+
     const cleanedText = text.length > 200 ? text.substring(0, 197) + '...' : text;
 
-    // Cost Saver Pack v6.0: Store in memo (hash-based with TTL)
     gptMemo.set(fen, language, voiceMode, bestSan, cleanedText);
 
     return { text: cleanedText };
   } catch (error) {
     console.error("GPT comment error:", error);
-    
-    // Fallback responses (no generic phrases!)
     const fallbacks = voiceMode === 'kids' ? [
       "This is an interesting position! Let's think about our best moves.",
       "Great game so far! Remember to think about your piece development.",
@@ -204,7 +215,6 @@ Example BAD responses (NEVER DO THIS):
       "The current setup requires careful planning. Evaluate your candidate moves thoroughly.",
       "An intriguing position that demands precise calculation. Focus on your tactical opportunities."
     ];
-    
     return { text: fallbacks[Math.floor(Math.random() * fallbacks.length)] };
   }
 }
@@ -221,7 +231,7 @@ export async function analyzeMove(
   comment?: string;
 }> {
   const { coachingStyle = "balanced", difficulty = 50, verbosity = 50, language = "english" } = settings;
-  
+
   const styleInstruction = getStyleInstruction(coachingStyle);
   const languageInstruction = getLanguageInstruction(language);
   const sentenceCount = verbosity < 30 ? "1-2" : verbosity > 70 ? "3-4" : "2-3";
@@ -234,20 +244,17 @@ Move ${moveNumber}: ${move}
 Previous moves: ${moveHistory.slice(0, moveNumber).join(" ")}
 
 Provide a ${detailLevel} analysis of this move in ${sentenceCount} sentences. ${languageInstruction}.
-
-Consider:
-- The tactical and strategic implications
-- Whether it's a strong move, inaccuracy, mistake, or blunder
-- What the player should be thinking about
-
-Respond in JSON format with:
-{
-  "analysis": "Your ${sentenceCount} sentence analysis",
-  "evaluation": "brilliant" | "good" | "inaccuracy" | "mistake" | "blunder",
-  "comment": "Optional one-sentence tip or alternative"
-}`;
+`;
 
   const maxTokens = verbosity < 30 ? 200 : verbosity > 70 ? 400 : 300;
+
+  const openai = getOpenAIClient();
+  if (!openai) {
+    console.warn('[openai] OPENAI_API_KEY not set - returning fallback analysis');
+    return {
+      analysis: "Quick analysis: consider development and king safety. Evaluate candidate moves carefully.",
+    };
+  }
 
   try {
     const response = await openai.chat.completions.create({
@@ -266,8 +273,8 @@ Respond in JSON format with:
       max_completion_tokens: maxTokens,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    
+    const result = JSON.parse(response.choices?.[0]?.message?.content || "{}");
+
     return {
       analysis: result.analysis || "Analyzing this position...",
       evaluation: result.evaluation,
@@ -291,7 +298,7 @@ export async function answerQuestion(
   settings: CoachingSettings = {}
 ): Promise<string> {
   const { coachingStyle = "balanced", difficulty = 50, verbosity = 50, language = "english" } = settings;
-  
+
   const styleInstruction = getStyleInstruction(coachingStyle);
   const languageInstruction = getLanguageInstruction(language);
   const sentenceCount = verbosity < 30 ? "1-2" : verbosity > 70 ? "3-5" : "2-4";
@@ -305,9 +312,16 @@ Moves played: ${context.moveHistory.slice(0, context.currentMove).join(" ")}
 
 Student's question: "${question}"
 
-Provide a clear, helpful answer in ${sentenceCount} sentences using ${detailLevel}. ${languageInstruction}. Be encouraging and educational.`;
+Provide a clear, helpful answer in ${sentenceCount} sentences using ${detailLevel}. ${languageInstruction}. Be encouraging and educational.
+`;
 
   const maxTokens = verbosity < 30 ? 150 : verbosity > 70 ? 350 : 250;
+
+  const openai = getOpenAIClient();
+  if (!openai) {
+    console.warn('[openai] OPENAI_API_KEY not set - returning fallback answer');
+    return "I can't call the AI right now, but generally: check development, piece activity, and candidate moves. Try simplifying your question.";
+  }
 
   try {
     const response = await openai.chat.completions.create({
@@ -325,7 +339,7 @@ Provide a clear, helpful answer in ${sentenceCount} sentences using ${detailLeve
       max_completion_tokens: maxTokens,
     });
 
-    return response.choices[0].message.content || "I'm here to help! Could you rephrase your question?";
+    return response.choices?.[0]?.message?.content || "I'm here to help! Could you rephrase your question?";
   } catch (error) {
     console.error("OpenAI question error:", error);
     return "I'm having trouble processing that right now. Could you try asking again?";

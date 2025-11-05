@@ -1,0 +1,9 @@
+- [ ] Analizar el contexto del proyecto y los "95 problems"
+- [ ] Identificar la fuente de los problemas (archivo JSON o base de datos)
+- [ ] Cargar los problemas en el entorno de ejecución
+- [ ] Implementar o invocar el motor de ajedrez (Stockfish u otro)
+- [ ] Resolver los 95 problemas automáticamente
+- [ ] Registrar las soluciones generadas
+- [ ] Validar las soluciones (comparar con respuestas esperadas si existen)
+- [ ] Generar un informe de resultados
+- [ ] Verificar la ejecución completa y correcta

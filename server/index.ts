@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import path from "path";
@@ -16,6 +17,7 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser()); // feat(subscriptions): for plan mode cookies
 
 // v7.0: Serve attached_assets statically (for eco.min.json, puzzles.sample.json, etc)
 app.use(express.static(path.join(process.cwd(), 'attached_assets')));
@@ -74,12 +76,44 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+  let port = parseInt(process.env.PORT || '5000', 10);
+
+  // On Windows, `reusePort` is not supported and will cause listen errors.
+  // Only set reusePort when it's supported (non-Windows platforms).
+  const baseListenOptions: any = { host: "0.0.0.0" };
+
+  // Try to bind to the configured port; if it's in use, increment and retry
+  // a few times so local development won't fail when a port is occupied.
+  const maxRetries = 5;
+  let attempt = 0;
+
+  const tryListen = (p: number) => {
+    const listenOptions: any = { ...baseListenOptions, port: p };
+    if (process.platform !== 'win32') {
+      listenOptions.reusePort = true;
+    }
+
+    // Attach a one-time error handler for this attempt
+    const onError = (err: any) => {
+      if (err && err.code === 'EADDRINUSE' && attempt < maxRetries) {
+        log(`port ${p} in use, trying port ${p + 1} (attempt ${attempt + 1}/${maxRetries})`);
+        attempt++;
+        // small delay before retrying to avoid racing issues
+        setTimeout(() => tryListen(p + 1), 200);
+      } else {
+        // no more retries or different error — rethrow so it surfaces
+        throw err;
+      }
+    };
+
+    server.once('error', onError);
+
+    server.listen(listenOptions, () => {
+      // remove the error listener for this attempt after successful listen
+      server.removeListener('error', onError);
+      log(`serving on port ${p}`);
+    });
+  };
+
+  tryListen(port);
 })();

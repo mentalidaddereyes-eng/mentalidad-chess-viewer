@@ -1,7 +1,5 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import { Chess } from "chess.js";
-import { ChessBoard } from "@/components/ChessBoard";
-import { InteractiveChessBoard } from "@/components/InteractiveChessBoard";
 import { MoveControls } from "@/components/MoveControls";
 import { useToast } from "@/hooks/use-toast";
 import { Game, MoveAnalysis } from "@shared/schema";
@@ -11,7 +9,6 @@ import { useSearch, useLocation } from "wouter";
 import { useVoice } from "@/hooks/use-voice";
 import { ChessComHeader } from "@/components/ChessComHeader";
 import { ActionPanel } from "@/components/ActionPanel";
-import { RightPanel } from "@/components/RightPanel";
 import { MobileDock } from "@/components/MobileDock";
 import { PositionEditor } from "@/components/PositionEditor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -20,6 +17,13 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload, Loader2 } from "lucide-react";
+import { useRef } from "react";
+import { UpgradeModal } from "@/components/UpgradeModal"; // feat(subscriptions)
+
+const InteractiveChessBoard = lazy(() => import("@/components/InteractiveChessBoard").then(m => ({ default: m.InteractiveChessBoard })));
+const RightPanel = lazy(() => import("@/components/RightPanel").then(m => ({ default: m.RightPanel })));
+const GameInfo = lazy(() => import("@/components/GameInfo").then(m => ({ default: m.GameInfo })));
+const AnalysisPanel = lazy(() => import("@/components/AnalysisPanel").then(m => ({ default: m.AnalysisPanel })));
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -84,6 +88,7 @@ export default function Trainer() {
   const searchString = useSearch();
   const searchParams = new URLSearchParams(searchString);
   const gameIdParam = searchParams.get("gameId");
+  const boardWrapperRef = useRef<HTMLDivElement | null>(null);
   
   const [chess] = useState(new Chess());
   const [game, setGame] = useState<Game | null>(null);
@@ -118,8 +123,55 @@ export default function Trainer() {
   // v7.0: Position Editor
   const [editorOpen, setEditorOpen] = useState(false);
   
+  // feat(subscriptions): Upgrade modal
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeModalReason, setUpgradeModalReason] = useState<'TRIAL_ENDED' | 'UPGRADE_REQUIRED'>('TRIAL_ENDED');
+  const [upgradeModalCurrentPlan, setUpgradeModalCurrentPlan] = useState<string>('free');
+  const [upgradeModalRequiredPlan, setUpgradeModalRequiredPlan] = useState<string>('pro');
+  
   // HOTFIX v6.2: Multi-game import from file
   const [importedGames, setImportedGames] = useState<Array<{pgn: string; white: string; black: string; result: string; eco: string; date: string}>>([]);
+  
+  const [loadRightPanel, setLoadRightPanel] = useState(false);
+  const [loadGameInfo, setLoadGameInfo] = useState(false);
+  const [loadAnalysisPanel, setLoadAnalysisPanel] = useState(false);
+
+  // proactively load secondary panels when user interacts with board area (non-visual change)
+  useEffect(() => {
+    const el = boardWrapperRef.current;
+    if (!el) {
+      // fallback: schedule idle load for non-critical panels
+      const t = window.requestIdleCallback
+        ? (window as any).requestIdleCallback(() => {
+            setLoadRightPanel(true);
+            setLoadGameInfo(true);
+            setLoadAnalysisPanel(true);
+          })
+        : window.setTimeout(() => {
+            setLoadRightPanel(true);
+            setLoadGameInfo(true);
+            setLoadAnalysisPanel(true);
+          }, 1500);
+      return () => {
+        if ((window as any).cancelIdleCallback) {
+          (window as any).cancelIdleCallback(t);
+        } else {
+          clearTimeout(t as number);
+        }
+      };
+    }
+    const onEnter = () => {
+      setLoadRightPanel(true);
+      setLoadGameInfo(true);
+      setLoadAnalysisPanel(true);
+    };
+    el.addEventListener("mouseenter", onEnter, { once: true });
+    el.addEventListener("touchstart", onEnter, { once: true });
+    return () => {
+      el.removeEventListener("mouseenter", onEnter);
+      el.removeEventListener("touchstart", onEnter);
+    };
+  }, []);
 
   console.log('[mode] free-analysis ready | training=ON | interactive=drag+tap');
 
@@ -129,7 +181,7 @@ export default function Trainer() {
     enabled: !!gameIdParam,
   });
 
-  // Get move analysis mutation
+  // Get move analysis mutation - feat(subscriptions): handle 402 errors
   const analyzeMoveMutation = useMutation({
     mutationFn: async (moveData: { moveNumber: number; move: string; fen: string }) => {
       const settings = getUserSettings();
@@ -139,16 +191,48 @@ export default function Trainer() {
         voiceMode,
         muted,
       });
+      
+      // Handle 402 Payment Required (trial ended or upgrade required)
+      if (res.status === 402) {
+        const errorData = await res.json();
+        throw { status: 402, ...errorData };
+      }
+      
+      if (!res.ok) {
+        throw new Error(`Analysis failed: ${res.statusText}`);
+      }
+      
       return await res.json();
     },
-    onSuccess: (data: MoveAnalysis & { audioUrl?: string }) => {
+    onSuccess: (data: MoveAnalysis & { audioUrl?: string; plan?: string; trialUsed?: boolean }) => {
       setCurrentAnalysis(data);
-      console.log('[coach] onUserMove fen=', fen.split(' ')[0], 'eval=', data.score || data.mate);
+      console.log('[coach] onUserMove fen=', fen.split(' ')[0], 'eval=', data.score || data.mate, 'plan=', data.plan);
       
       speak(data.audioUrl);
       if (data.audioUrl && !muted) {
         setIsSpeaking(true);
         setTimeout(() => setIsSpeaking(false), 3000);
+      }
+    },
+    onError: (error: any) => {
+      if (error.status === 402) {
+        // Show upgrade modal
+        setUpgradeModalReason(error.reason || 'TRIAL_ENDED');
+        setUpgradeModalCurrentPlan(error.currentPlan || 'free');
+        setUpgradeModalRequiredPlan(error.requiredPlan || 'pro');
+        setUpgradeModalOpen(true);
+        
+        toast({
+          title: "Sesión PRO terminada",
+          description: "Tu sesión avanzada ha terminado. Activa PRO para continuar.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error de análisis",
+          description: error.message || "No se pudo analizar el movimiento",
+          variant: "destructive",
+        });
       }
     },
   });
@@ -752,23 +836,25 @@ export default function Trainer() {
 
         {/* Center Panel - Chess Board */}
         <div className="flex flex-col gap-2 overflow-hidden">
-          <div className="chess-board-wrapper">
-            <InteractiveChessBoard
-              fen={fen}
-              orientation={boardOrientation}
-              onMove={handleMove}
-              showLegalMoves={true}
-              disabled={isEngineThinking}
-              className="w-full h-full"
-              data-testid="interactive-chess-board"
-            />
+          <div ref={boardWrapperRef} className="chess-board-wrapper">
+            <Suspense fallback={<div className="w-full h-full flex items-center justify-center p-6">Cargando tablero...</div>}>
+              <InteractiveChessBoard
+                fen={fen}
+                orientation={boardOrientation}
+                onMove={handleMove}
+                showLegalMoves={true}
+                disabled={isEngineThinking}
+                className="w-full h-full"
+                data-testid="interactive-chess-board"
+              />
+            </Suspense>
           </div>
 
           {/* Compact navigation under board */}
           <div className="flex justify-center">
             <MoveControls
-              currentMove={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) : Math.ceil(currentMove / 2)}
-              totalMoves={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) : Math.ceil(moveHistory.length / 2)}
+              currentMove={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) || 0 : Math.ceil((currentMove || 0) / 2) || 0}
+              totalMoves={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) || 0 : Math.ceil((moveHistory.length || 0) / 2) || 0}
               isAutoPlaying={isAutoPlaying}
               onFirst={() => {
                 if (!isAnalysisMode) goToMove(0);
@@ -805,34 +891,42 @@ export default function Trainer() {
 
         {/* Right Panel - Analysis/Moves/Coach */}
         <div className="overflow-hidden">
-          <RightPanel
-            analysis={currentAnalysis}
-            moveHistory={moveHistory}
-            currentMove={currentMove}
-            isSpeaking={isSpeaking}
-            exploratoryMoves={exploratoryMoves}
-            isAnalysisMode={isAnalysisMode}
-            onAskQuestion={(q) => askQuestionMutation.mutate(q)}
-            lastAnswer={lastAnswer}
-            games={importedGames}
-            currentFen={fen}
-            onExportPgn={handleExportPgn}
-            onSelectGame={(index: number) => {
-              const game = importedGames[index];
-              chess.reset();
-              chess.loadPgn(game.pgn);
-              const moves = chess.history();
-              const finalFen = chess.fen();
-              const lastMoveObj = chess.history({ verbose: true}).slice(-1)[0];
-              setMoveHistory(moves);
-              setCurrentMove(moves.length);
-              setFen(finalFen);
-              setLastMove(lastMoveObj ? { from: lastMoveObj.from, to: lastMoveObj.to } : null);
-              setCurrentAnalysis(null);
-              setIsAnalysisMode(false);
-              console.log('[games] selected game', index, game.white, 'vs', game.black);
-            }}
-          />
+          {loadRightPanel ? (
+            <Suspense fallback={<div className="p-4">Cargando panel...</div>}>
+              <RightPanel
+                analysis={currentAnalysis}
+                moveHistory={moveHistory}
+                currentMove={currentMove}
+                isSpeaking={isSpeaking}
+                exploratoryMoves={exploratoryMoves}
+                isAnalysisMode={isAnalysisMode}
+                onAskQuestion={(q) => askQuestionMutation.mutate(q)}
+                lastAnswer={lastAnswer}
+                games={importedGames}
+                currentFen={fen}
+                onExportPgn={handleExportPgn}
+                onSelectGame={(index: number) => {
+                  const game = importedGames[index];
+                  chess.reset();
+                  chess.loadPgn(game.pgn);
+                  const moves = chess.history();
+                  const finalFen = chess.fen();
+                  const lastMoveObj = chess.history({ verbose: true}).slice(-1)[0];
+                  setMoveHistory(moves);
+                  setCurrentMove(moves.length);
+                  setFen(finalFen);
+                  setLastMove(lastMoveObj ? { from: lastMoveObj.from, to: lastMoveObj.to } : null);
+                  setCurrentAnalysis(null);
+                  setIsAnalysisMode(false);
+                  console.log('[games] selected game', index, game.white, 'vs', game.black);
+                }}
+              />
+            </Suspense>
+          ) : (
+            <div className="p-4" aria-hidden>
+              {/* Placeholder to avoid layout shift; right panel will load after interaction */}
+            </div>
+          )}
         </div>
       </div>
 
@@ -853,7 +947,7 @@ export default function Trainer() {
                 type="file"
                 accept=".pgn"
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
+                  const file = (e.target as HTMLInputElement).files?.[0];
                   if (file) {
                     const reader = new FileReader();
                     reader.onload = (ev) => {
@@ -873,7 +967,7 @@ export default function Trainer() {
                 id="import-input"
                 placeholder="[Event ...] 1. e4 e5 2. Nf3... OR rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
                 value={importInput}
-                onChange={(e) => setImportInput(e.target.value)}
+                onChange={(e) => setImportInput((e.target as HTMLTextAreaElement).value)}
                 className="font-mono text-xs min-h-[200px]"
                 data-testid="import-textarea"
               />
@@ -913,6 +1007,15 @@ export default function Trainer() {
         }}
         canGoPrevious={currentMove > 0}
         canGoNext={currentMove < moveHistory.length}
+      />
+
+      {/* feat(subscriptions): Upgrade Modal */}
+      <UpgradeModal
+        open={upgradeModalOpen}
+        onOpenChange={setUpgradeModalOpen}
+        reason={upgradeModalReason}
+        currentPlan={upgradeModalCurrentPlan}
+        requiredPlan={upgradeModalRequiredPlan}
       />
     </div>
   );
