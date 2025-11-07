@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+/* FIX BLOCKERS v1: board render + worker routes + basic nav + ask coach enable */
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);
@@ -343,6 +345,7 @@
     body {
       font-size: 16px;
       -webkit-text-size-adjust: 100%; /* Prevent text scaling */
+      text-size-adjust: 100%; /* Cross-browser support */
     }
     
     /* Larger text for better readability on mobile */
@@ -410,10 +413,12 @@
   }
 
   /* Chess.com+ 3-column grid layout */
-  .chesscom-layout {
+.chesscom-layout {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    background-color: #0f1c2e;
+    color: #e6edf3;
   }
 
   .chesscom-grid {
@@ -426,9 +431,9 @@
     min-height: 0;
   }
 
-  @media (min-width: 1024px) {
+@media (min-width: 1024px) {
     .chesscom-grid {
-      grid-template-columns: 280px minmax(480px, 720px) 360px;
+      grid-template-columns: minmax(280px, 320px) minmax(520px, 1fr) minmax(360px, 420px); /* 3 columnas: historial + tablero + panel derecho */
       gap: 0.75rem;
       padding: 0.75rem; /* Normal padding on desktop */
       overflow-y: auto; /* Allow scroll on desktop too for short screens */
@@ -474,8 +479,18 @@
   }
 }
 
+/* Move quality coloring (evalDiff) */
+.move-quality.good { color: #5bc46a; }
+.move-quality.inaccuracy { color: #f4e06d; }
+.move-quality.mistake { color: #f39c12; }
+.move-quality.blunder { color: #e74c3c; }
+
+/* Hotfix Board v3 helpers */
+.col-center { max-height: calc(100dvh - 120px); }
+.col-right { max-height: calc(100dvh - 120px); overflow: auto; }
+/* Extend board to ensure good rendering even if wrapper sizing changes */
+.board { object-fit: contain; display: block; }
+/* Ensure board container centers controls and spacing */
+.board-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
 @layer components { .border-border { border-color: hsl(var(--border)); } }
-
-
-
-

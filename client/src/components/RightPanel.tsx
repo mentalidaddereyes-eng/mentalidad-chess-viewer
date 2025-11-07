@@ -59,8 +59,10 @@ export function RightPanel({
   const [openings, setOpenings] = useState<Opening[]>([]);
 
   const handleAskQuestion = () => {
-    if (question.trim() && onAskQuestion) {
-      onAskQuestion(question.trim());
+    const prompt = question.trim();
+    if (prompt) {
+      console.log('AskCoach:', prompt);
+      if (onAskQuestion) onAskQuestion(prompt);
       setQuestion("");
     }
   };
@@ -95,24 +97,32 @@ export function RightPanel({
   const displayMoves = isAnalysisMode ? exploratoryMoves : moveHistory;
 
   return (
-    <Card className="panel h-full flex flex-col p-2">
+    <Card className="panel right-panel-confined h-full flex flex-col p-2">
       <Tabs defaultValue="analysis" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="mx-2 mt-2 grid w-[calc(100%-1rem)] grid-cols-5">
+<TabsList className="mx-2 mt-2 grid w-[calc(100%-1rem)] grid-cols-7">
           <TabsTrigger value="analysis" className="text-xs" data-testid="tab-analysis">
             <Bot className="w-3 h-3 mr-1" />
-            <span className="hidden sm:inline">Analysis</span>
+<span className="hidden sm:inline">Análisis</span>
           </TabsTrigger>
           <TabsTrigger value="moves" className="text-xs" data-testid="tab-moves">
             <List className="w-3 h-3 mr-1" />
-            <span className="hidden sm:inline">Moves</span>
+<span className="hidden sm:inline">Movimientos</span>
           </TabsTrigger>
           <TabsTrigger value="games" className="text-xs" data-testid="tab-games">
             <List className="w-3 h-3 mr-1" />
             <span className="hidden sm:inline">Games</span>
           </TabsTrigger>
-          <TabsTrigger value="openings" className="text-xs" data-testid="tab-openings">
+<TabsTrigger value="openings" className="text-xs" data-testid="tab-openings">
             <BookOpen className="w-3 h-3 mr-1" />
             <span className="hidden sm:inline">Aperturas</span>
+          </TabsTrigger>
+          <TabsTrigger value="dvoretsky" className="text-xs" data-testid="tab-dvoretsky">
+            <BookOpen className="w-3 h-3 mr-1" />
+            <span className="hidden sm:inline">GM Dvoretsky</span>
+          </TabsTrigger>
+          <TabsTrigger value="fen" className="text-xs" data-testid="tab-fen">
+            <BookOpen className="w-3 h-3 mr-1" />
+            <span className="hidden sm:inline">Ejercicios FEN</span>
           </TabsTrigger>
           <TabsTrigger value="coach" className="text-xs" data-testid="tab-coach">
             <MessageSquare className="w-3 h-3 mr-1" />
@@ -315,6 +325,24 @@ export function RightPanel({
                   )}
                 </div>
               )}
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        {/* GM Dvoretsky Tab */}
+        <TabsContent value="dvoretsky" className="flex-1 mt-0 p-2 min-h-0">
+          <ScrollArea className="confined-scroll h-full">
+            <div className="pr-4 text-xs text-muted-foreground">
+              <p>Principios y patrones de entrenamiento (placeholder).</p>
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        {/* Ejercicios FEN Tab */}
+        <TabsContent value="fen" className="flex-1 mt-0 p-2 min-h-0">
+          <ScrollArea className="confined-scroll h-full">
+            <div className="pr-4 text-xs text-muted-foreground">
+              <p>Pega o genera ejercicios FEN para practicar (placeholder).</p>
             </div>
           </ScrollArea>
         </TabsContent>

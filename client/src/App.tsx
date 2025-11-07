@@ -8,6 +8,7 @@ import { UpdateNotification } from "@/components/UpdateNotification";
 import { PlanBanner } from "@/components/PlanBanner"; // Cost Saver Pack v6.0
 import { TrialBanner } from "@/components/TrialBanner"; // feat(subscriptions)
 import UpgradeModal from "@/components/UpgradeModal";
+import ChessComHeader from "@/components/ChessComHeader";
 
 const Trainer = lazy(() => import("@/pages/Trainer"));
 const History = lazy(() => import("@/pages/History"));
@@ -67,6 +68,7 @@ function App() {
         <PlanBanner />
         <TrialBanner />
         <Toaster />
+        <ChessComHeader />
         <Router />
         <UpgradeModal open={upgradeOpen} onOpenChange={setUpgradeOpen} />
       </TooltipProvider>

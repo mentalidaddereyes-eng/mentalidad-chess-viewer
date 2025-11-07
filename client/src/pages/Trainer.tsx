@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from "react";
+import React, { useState, useEffect, Suspense, lazy, useMemo } from "react";
 import { Chess } from "chess.js";
 import { MoveControls } from "@/components/MoveControls";
 import { useToast } from "@/hooks/use-toast";
@@ -7,7 +7,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useSearch, useLocation } from "wouter";
 import { useVoice } from "@/hooks/use-voice";
-import { ChessComHeader } from "@/components/ChessComHeader";
 import { ActionPanel } from "@/components/ActionPanel";
 import { MobileDock } from "@/components/MobileDock";
 import { PositionEditor } from "@/components/PositionEditor";
@@ -26,6 +25,53 @@ const GameInfo = lazy(() => import("@/components/GameInfo").then(m => ({ default
 const AnalysisPanel = lazy(() => import("@/components/AnalysisPanel").then(m => ({ default: m.AnalysisPanel })));
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+/* FIX BLOCKERS v1: PGN demo corto (3–6 jugadas) para navegación básica */
+const DEMO_PGN = `[Event "Demo"]
+[Site "Local"]
+[Date "2025.11.05"]
+[Round "-"]
+[White "White"]
+[Black "Black"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *`;
+
+/* Helper: construir juego cargado desde PGN con acceso a FEN por índice */
+function makeLoadedGame(pgn?: string) {
+  const c = new Chess();
+  let moves: string[] = [];
+  if (pgn && pgn.trim()) {
+    try {
+      c.reset();
+      c.loadPgn(pgn);
+      moves = c.history();
+      c.reset();
+    } catch (_e) {
+      moves = [];
+    }
+  }
+  // Precalcular FENs (inicio + después de cada movimiento)
+  const fens: string[] = [];
+  c.reset();
+  fens.push(c.fen());
+  for (const m of moves) {
+    try {
+      c.move(m);
+      fens.push(c.fen());
+    } catch {
+      break;
+    }
+  }
+  return {
+    moves,
+    movesCount: Math.max(0, fens.length - 1),
+    fenAt: (i: number) => {
+      const idx = Math.max(0, Math.min(i, fens.length - 1));
+      return fens[idx];
+    },
+  };
+}
 
 // Split multi-game PGN into individual games
 function splitPgn(pgn: string): string[] {
@@ -118,7 +164,8 @@ export default function Trainer() {
   
   // Dialogs - Hotfix v5.1.1: Single Import dialog
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importInput, setImportInput] = useState("");
+  /* FIX BLOCKERS v1: precargar PGN demo para DX rápida */
+  const [importInput, setImportInput] = useState(DEMO_PGN);
   const [lichessUrl, setLichessUrl] = useState("");
   const [chessUrl, setChessUrl] = useState("");
   
@@ -134,11 +181,21 @@ export default function Trainer() {
   // HOTFIX v6.2: Multi-game import from file
   const [importedGames, setImportedGames] = useState<Array<{pgn: string; white: string; black: string; result: string; eco: string; date: string}>>([]);
   
-  const [loadRightPanel, setLoadRightPanel] = useState(false);
+  const [loadRightPanel, setLoadRightPanel] = useState(typeof window !== "undefined" ? window.innerWidth >= 1024 : false);
   const [loadGameInfo, setLoadGameInfo] = useState(false);
   const [loadAnalysisPanel, setLoadAnalysisPanel] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const [engineDepth, setEngineDepth] = useState(0);
+
+  // Fuente de verdad única para el juego cargado (evita TDZ/sombras)
+  const loadedGameRef = useRef<ReturnType<typeof makeLoadedGame> | null>(null);
+
+  // Adaptador de "drawBoard" a nuestro renderer React
+  const drawBoardFromFen = (fenStr: string) => {
+    try {
+      setFen(fenStr);
+    } catch {}
+  };
 
   // proactively load secondary panels when user interacts with board area (non-visual change)
   useEffect(() => {
@@ -179,10 +236,28 @@ export default function Trainer() {
 
   // Initialize local Stockfish worker (WASM) with CDN fallback
   useEffect(() => {
+    console.log('[init] creating stockfish worker at /engine/worker.js');
     const w = new Worker('/engine/worker.js');
     workerRef.current = w;
+
+    w.onerror = (err: any) => {
+      console.log('[engine:error] worker error', err?.message || err);
+    };
+
     w.onmessage = (ev: MessageEvent<any>) => {
       const msg = ev.data || {};
+      if (msg.type === 'ready') {
+        console.log('[engine] ready');
+        return;
+      }
+      if (msg.type === 'error') {
+        console.log('[engine:error]', msg.error || msg);
+        return;
+      }
+      if (msg.type === 'result') {
+        console.log('[engine:result] bestMove=', msg.bestMove);
+        return;
+      }
       if (msg.type === 'info') {
         if (typeof msg.depth === 'number') setEngineDepth(msg.depth);
         if (msg.score !== undefined || msg.mate !== undefined || msg.best !== undefined) {
@@ -193,8 +268,10 @@ export default function Trainer() {
             bestMove: msg.best !== undefined ? msg.best : (prev as any)?.bestMove,
           }) as any);
         }
+        return;
       }
     };
+
     return () => {
       try { w.postMessage({ cmd: 'quit' }); } catch {}
       w.terminate();
@@ -202,10 +279,80 @@ export default function Trainer() {
     };
   }, []);
 
+  // Init seguro: inicializa loadedGameRef con PGN demo y dibuja tablero (no bloquea render)
+  useEffect(() => {
+    try {
+      loadedGameRef.current = makeLoadedGame(DEMO_PGN);
+      setMoveHistory(loadedGameRef.current.moves);
+      setCurrentMove(0);
+      drawBoardFromFen(loadedGameRef.current.fenAt?.(0) ?? STARTING_FEN);
+      console.log('[Trainer] init OK');
+    } catch (_e) {
+      drawBoardFromFen(STARTING_FEN);
+    }
+  }, []);
+
+  /* FIX BLOCKERS v1: Autocargar PGN demo si no hay partida y no hay historial */
+  useEffect(() => {
+    if (moveHistory.length === 0 && !gameIdParam) {
+      try {
+        console.log('[demo] loading embedded demo PGN');
+        const games = splitPgn(DEMO_PGN);
+        setAvailablePgns(games);
+        setCurrentGameIndex(0);
+
+        chess.reset();
+        chess.loadPgn(games[0]);
+        const moves = chess.history();
+        const finalFen = chess.fen();
+        const lastMoveObj = chess.history({ verbose: true }).slice(-1)[0];
+
+        // Registrar lista en pestaña Games
+        const meta = parsePgnMeta(games[0]);
+        setImportedGames(games.map((pgn) => {
+          const m = parsePgnMeta(pgn);
+          return {
+            pgn,
+            white: m.white || "White",
+            black: m.black || "Black",
+            result: m.result || "*",
+            eco: m.eco || "",
+            date: m.date || "",
+          };
+        }));
+
+        setGame({
+          id: 0,
+          white: meta.white || "White",
+          black: meta.black || "Black",
+          result: null,
+          event: meta.event || "Demo",
+          site: "Local",
+          opening: null,
+          date: meta.date || null,
+          pgn: games[0],
+          createdAt: new Date(),
+        } as any);
+
+        setMoveHistory(moves);
+        setCurrentMove(moves.length);
+        setFen(finalFen);
+        setLastMove(lastMoveObj ? { from: lastMoveObj.from, to: lastMoveObj.to } : null);
+        setCurrentAnalysis(null);
+        setIsAnalysisMode(false);
+        console.log('[demo] demo PGN loaded, moves=', moves.length);
+      } catch (e) {
+        console.log('[demo] failed to load demo PGN', e);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameIdParam, moveHistory.length]);
+
+  console.log('[init] board shell ready (aspect 1:1, max 720px)');
   console.log('[mode] free-analysis ready | training=ON | interactive=drag+tap');
 
   // Load game from history if gameId is in URL
-  const { data: loadedGame } = useQuery<Game>({
+  const { data: loadedGameData } = useQuery<Game>({
     queryKey: [`/api/games/${gameIdParam}`],
     enabled: !!gameIdParam,
   });
@@ -308,22 +455,33 @@ export default function Trainer() {
 
   // Navigate to a specific move (for PGN navigation)
   const goToMove = (moveIndex: number) => {
+    const lg = loadedGameRef.current;
+    if (lg) {
+      const clamped = Math.max(0, Math.min(moveIndex, lg.movesCount));
+      console.log('[Trainer] nav ->', clamped);
+      setCurrentMove(clamped);
+      drawBoardFromFen(lg.fenAt(clamped));
+      if (clamped === 0) setCurrentAnalysis(null);
+      return;
+    }
+
+    // Fallback al flujo existente basado en moveHistory/Chess.js
     if (moveIndex < 0 || moveIndex > moveHistory.length) return;
-    
+
     chess.reset();
-    let lastMoveInfo = null;
-    
+    let lastMoveInfo: any = null;
+
     for (let i = 0; i < moveIndex; i++) {
       const move = chess.move(moveHistory[i]);
       if (i === moveIndex - 1 && move) {
         lastMoveInfo = { from: move.from, to: move.to };
       }
     }
-    
+
     setCurrentMove(moveIndex);
     setFen(chess.fen());
     setLastMove(lastMoveInfo);
-    
+
     if (moveIndex > 0 && moveHistory[moveIndex - 1]) {
       analyzeMoveMutation.mutate({
         moveNumber: moveIndex,
@@ -351,21 +509,29 @@ export default function Trainer() {
 
   // Load game from database when fetched via URL parameter
   useEffect(() => {
-    if (loadedGame && loadedGame.pgn) {
-      const games = splitPgn(loadedGame.pgn);
+    if (loadedGameData && loadedGameData.pgn) {
+      const games = splitPgn(loadedGameData.pgn);
       console.log('[games] loaded:', games.length);
-      
+
       setAvailablePgns(games);
       setCurrentGameIndex(0);
-      
+
       const firstPgn = games[0];
       chess.loadPgn(firstPgn);
       const moves = chess.history();
       const finalFen = chess.fen();
       const lastMoveObj = chess.history({ verbose: true }).slice(-1)[0];
       chess.reset();
-      
-      setGame(loadedGame);
+
+      // Actualizar referencia de juego cargado y dibujar desde inicio
+      try {
+        loadedGameRef.current = makeLoadedGame(loadedGameData.pgn);
+        drawBoardFromFen(loadedGameRef.current.fenAt(0));
+      } catch {
+        drawBoardFromFen(finalFen);
+      }
+
+      setGame(loadedGameData);
       setMoveHistory(moves);
       setCurrentMove(moves.length);
       setFen(finalFen);
@@ -373,7 +539,7 @@ export default function Trainer() {
       setCurrentAnalysis(null);
       setIsAnalysisMode(false); // Switch to game view mode
     }
-  }, [loadedGame, chess]);
+  }, [loadedGameData, chess]);
 
   // Handle move in analysis/play mode
   const handleMove = (move: { from: string; to: string; promotion?: string }) => {
@@ -896,121 +1062,205 @@ export default function Trainer() {
     });
   };
 
+  // Movimientos a mostrar según modo (análisis libre vs partida cargada)
+  const displayMoves = isAnalysisMode ? exploratoryMoves : moveHistory;
+
+  // Heurística simple: calidad por diferencia de evaluación material entre jugadas
+  const moveQualities = useMemo(() => {
+    type Quality = 'good' | 'inaccuracy' | 'mistake' | 'blunder' | null;
+    const qualities: Quality[] = [];
+    if (!displayMoves || displayMoves.length === 0) return qualities;
+
+    const matValue: Record<string, number> = { p: 1, n: 3, b: 3.25, r: 5, q: 9, k: 0 };
+
+    const evalMaterial = (fenStr: string): number => {
+      try {
+        const c = new Chess();
+        c.load(fenStr);
+        const board = c.board();
+        let sum = 0;
+        for (const row of board) {
+          for (const sq of row) {
+            if (!sq) continue;
+            const v = matValue[sq.type] ?? 0;
+            sum += sq.color === 'w' ? v : -v;
+          }
+        }
+        return sum;
+      } catch {
+        return 0;
+      }
+    };
+
+    const getFenAt = (ply: number): string => {
+      // Preferir FENs precalculados cuando hay partida cargada
+      if (!isAnalysisMode && loadedGameRef.current?.fenAt) {
+        return loadedGameRef.current.fenAt(ply);
+      }
+      // Fallback: reconstruir aplicando jugadas desde el inicio
+      try {
+        const c = new Chess();
+        for (let i = 0; i < Math.max(0, Math.min(ply, displayMoves.length)); i++) {
+          try { c.move(displayMoves[i]); } catch { break; }
+        }
+        return c.fen();
+      } catch {
+        return STARTING_FEN;
+      }
+    };
+
+    for (let i = 0; i < displayMoves.length; i++) {
+      try {
+        const beforeFen = getFenAt(i);
+        const afterFen = getFenAt(i + 1);
+        const beforeEval = evalMaterial(beforeFen);
+        const afterEval = evalMaterial(afterFen);
+        const isWhiteMove = i % 2 === 0;
+        const diffFromMover = (afterEval - beforeEval) * (isWhiteMove ? 1 : -1);
+
+        let q: Quality = null;
+        if (diffFromMover >= 0.6) {
+          q = 'good';
+        } else if (diffFromMover >= 0.2) {
+          q = 'inaccuracy';
+        } else if (diffFromMover <= -0.4) {
+          q = 'blunder';
+        } else if (diffFromMover < -0.01) {
+          q = 'mistake';
+        } else {
+          q = null;
+        }
+
+        qualities.push(q);
+      } catch {
+        qualities.push(null);
+      }
+    }
+    return qualities;
+  }, [displayMoves, isAnalysisMode]);
+
+  // Render helper para aplicar color por calidad
+  const renderMoveSpan = (moveText: string | undefined, idx: number) => {
+    if (!moveText) return <span />;
+    const q = moveQualities[idx] as any;
+    const cls = q ? `move-quality ${q}` : '';
+    return <span className={cls}>{moveText}</span>;
+  };
+
   return (
     <div className="chesscom-layout">
-      <ChessComHeader
-        voiceMode={voiceMode}
-        muted={muted}
-        onToggleMute={toggleMute}
-        onVoiceModeChange={handleVoiceModeChange}
-        onGameLoad={handleLoadGame}
-        isLoading={false}
-      />
 
-      <div className="chesscom-grid main-grid">
-        {/* Left Panel - Actions */}
-        <div className="hidden lg:block overflow-y-auto">
-          <ActionPanel
-            isPlayVsCoach={isPlayVsCoach}
-            playerColor={playerColor}
-            isAutoPlaying={isAutoPlaying}
-            canUndo={exploratoryMoves.length > 0}
-            canRedo={false}
-            onNewGame={handleNewGame}
-            onImport={() => setImportDialogOpen(true)}
-            onOpenEditor={() => setEditorOpen(true)}
-            onFlipBoard={handleFlipBoard}
-            onUndo={() => {
-              if (exploratoryMoves.length > 0) {
-                analysisModeChess.undo();
-                setExploratoryMoves(prev => prev.slice(0, -1));
-                setFen(analysisModeChess.fen());
-              }
-            }}
-            onRedo={() => {}}
-            onToggleAutoPlay={() => setIsAutoPlaying(!isAutoPlaying)}
-            onExportPgn={handleExportPgn}
-            onSettings={() => setLocation("/settings")}
-            onTogglePlayVsCoach={handleTogglePlayVsCoach}
-            onPlayerColorChange={(color) => {
-              setPlayerColor(color);
-              // Update board orientation when player color changes
-              if (isPlayVsCoach) {
-                setBoardOrientation(color);
-                
-                // If changing to Black and game hasn't started, engine should make first move
-                if (color === "black" && exploratoryMoves.length === 0) {
-                  setTimeout(() => makeEngineMove(), 1000);
-                }
-              }
-            }}
-          />
+      <div className="mx-auto max-w-[1400px] px-4 pt-4 pb-10 grid grid-cols-1 lg:grid-cols-[280px_minmax(640px,1fr)_380px] gap-4">
+
+        {/* Left Panel (Historial) */}
+        <div className="hidden lg:block">
+          <h2 className="text-sm font-semibold mb-2">Historial</h2>
+          <div className="flex-1 overflow-y-auto">
+            {displayMoves.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Sin movimientos</p>
+            ) : (
+              <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1 font-mono text-xs">
+                {displayMoves.map((_, index) => {
+                  if (index % 2 === 0) {
+                    const moveNumber = Math.floor(index / 2) + 1;
+                    const whiteIdx = index;
+                    const blackIdx = index + 1;
+                    return (
+                      <div key={index} className="contents">
+                        <div className="text-muted-foreground">{moveNumber}.</div>
+                        <div>{renderMoveSpan(displayMoves[whiteIdx], whiteIdx)}</div>
+                        <div>{renderMoveSpan(displayMoves[blackIdx], blackIdx)}</div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Center Panel - Chess Board */}
-        <div className="flex flex-col gap-2 overflow-hidden">
-          <div ref={boardWrapperRef} className="board-wrap">
-            <div className="board">
-              <Suspense fallback={<div className="w-full h-full flex items-center justify-center p-6">Cargando tablero...</div>}>
-                <InteractiveChessBoard
-                  fen={fen}
-                  orientation={boardOrientation}
-                  onMove={handleMove}
-                  showLegalMoves={true}
-                  disabled={isEngineThinking}
-                  className="w-full h-full"
-                  data-testid="interactive-chess-board"
-                />
-              </Suspense>
-            </div>
+        {/* COLUMNA CENTRAL: SOLO TABLERO */}
+        <section className="lg:col-span-7 flex flex-col items-center justify-center w-full min-h-[calc(100vh-120px)]">
+          <div ref={boardWrapperRef} className="board-wrap flex flex-col items-center w-full max-w-[820px]">
+            <Suspense fallback={<div className="p-6">Cargando tablero…</div>}>
+              <InteractiveChessBoard
+                fen={fen}
+                orientation={boardOrientation}
+                onMove={handleMove}
+                showLegalMoves
+                disabled={isEngineThinking}
+                className="board"
+                data-testid="interactive-chess-board"
+              />
+            </Suspense>
           </div>
-
-          {/* Compact navigation under board */}
-          <div className="flex justify-center mt-2">
+          <div className="mt-3 w-full max-w-[820px] flex justify-center">
             <div className="dock px-3 py-2 rounded-lg">
               <MoveControls
-                currentMove={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) || 0 : Math.ceil((currentMove || 0) / 2) || 0}
-                totalMoves={isAnalysisMode ? Math.ceil(exploratoryMoves.length / 2) || 0 : Math.ceil((moveHistory.length || 0) / 2) || 0}
+                currentMove={isAnalysisMode ? Math.ceil(exploratoryMoves.length/2)||0 : Math.ceil((currentMove||0)/2)||0}
+                totalMoves={isAnalysisMode ? Math.ceil(exploratoryMoves.length/2)||0 : Math.ceil((moveHistory?.length||0)/2)||0}
                 isAutoPlaying={isAutoPlaying}
-                onFirst={() => {
-                  if (!isAnalysisMode) goToMove(0);
+                onFirst={()=>!isAnalysisMode && goToMove(0)}
+                onPrevious={()=>{
+                  if (isAnalysisMode && exploratoryMoves.length>0){ analysisModeChess.undo(); setExploratoryMoves(p=>p.slice(0,-1)); setFen(analysisModeChess.fen()); }
+                  else if (currentMove>0){ goToMove(currentMove-1); }
                 }}
-                onPrevious={() => {
-                  if (isAnalysisMode && exploratoryMoves.length > 0) {
-                    analysisModeChess.undo();
-                    setExploratoryMoves(prev => prev.slice(0, -1));
-                    setFen(analysisModeChess.fen());
-                  } else if (currentMove > 0) {
-                    goToMove(currentMove - 1);
-                  }
-                }}
-                onNext={() => {
-                  if (!isAnalysisMode && currentMove < moveHistory.length) {
-                    goToMove(currentMove + 1);
-                  }
-                }}
-                onLast={() => {
-                  if (!isAnalysisMode) goToMove(moveHistory.length);
-                }}
-                onToggleAutoPlay={() => setIsAutoPlaying(!isAutoPlaying)}
+                onNext={()=>{ if(!isAnalysisMode && currentMove<moveHistory.length){ goToMove(currentMove+1); } }}
+                onLast={()=>!isAnalysisMode && goToMove(moveHistory.length)}
+                onToggleAutoPlay={()=>setIsAutoPlaying(!isAutoPlaying)}
                 disabled={false}
               />
             </div>
           </div>
-
           {isEngineThinking && (
-            <div className="flex items-center justify-center gap-2 text-sm text-primary py-2">
+            <div className="flex items-center gap-2 text-sm text-primary py-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Coach is thinking...</span>
+              <span>Coach pensando…</span>
             </div>
           )}
-        </div>
+        </section>
 
         {/* Right Panel - Analysis/Moves/Coach */}
-        <div className="overflow-hidden">
+        <div className="lg:col-span-5 panel col-right panel-centered confined-scroll">
           {loadRightPanel ? (
-            <Suspense fallback={<div className="p-4">Cargando panel...</div>}>
-              <RightPanel
+            <>
+              <ActionPanel
+                isPlayVsCoach={isPlayVsCoach}
+                playerColor={playerColor}
+                isAutoPlaying={isAutoPlaying}
+                canUndo={exploratoryMoves.length > 0}
+                canRedo={false}
+                onNewGame={handleNewGame}
+                onImport={() => setImportDialogOpen(true)}
+                onOpenEditor={() => setEditorOpen(true)}
+                onFlipBoard={handleFlipBoard}
+                onUndo={() => {
+                  if (exploratoryMoves.length > 0) {
+                    analysisModeChess.undo();
+                    setExploratoryMoves(prev => prev.slice(0, -1));
+                    setFen(analysisModeChess.fen());
+                  }
+                }}
+                onRedo={() => {}}
+                onToggleAutoPlay={() => setIsAutoPlaying(!isAutoPlaying)}
+                onExportPgn={handleExportPgn}
+                onSettings={() => setLocation("/settings")}
+                onTogglePlayVsCoach={handleTogglePlayVsCoach}
+                onPlayerColorChange={(color) => {
+                  setPlayerColor(color);
+                  // Update board orientation when player color changes
+                  if (isPlayVsCoach) {
+                    setBoardOrientation(color);
+                    // If changing to Black and game hasn't started, engine should make first move
+                    if (color === "black" && exploratoryMoves.length === 0) {
+                      setTimeout(() => makeEngineMove(), 1000);
+                    }
+                  }
+                }}
+              />
+              <Suspense fallback={<div className="p-4">Cargando panel...</div>}>
+                <RightPanel
                 analysis={currentAnalysis}
                 moveHistory={moveHistory}
                 currentMove={currentMove}
@@ -1039,6 +1289,7 @@ export default function Trainer() {
                 }}
               />
             </Suspense>
+            </>
           ) : (
             <div className="p-4" aria-hidden>
               {/* Placeholder to avoid layout shift; right panel will load after interaction */}

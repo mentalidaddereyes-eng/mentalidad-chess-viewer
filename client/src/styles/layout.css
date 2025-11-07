@@ -1,3 +1,4 @@
+/* FIX BLOCKERS v1 */
 /* Layout minimal para centrado y escala del tablero y contenedores */
 .app-shell {
   min-height: 100%;
@@ -5,12 +6,26 @@
   color: var(--text);
 }
 
-/* Contenedor del tablero centrado y con ancho máximo */
-.board-wrap {
-  margin-inline: auto;
+/* Grid principal 3 columnas: historial | tablero | panel derecho (responsive) */
+.chesscom-grid.main-grid {
+  display: grid;
+  grid-template-columns: 1fr; /* mobile por defecto: una columna */
+  align-items: start;
+  gap: 16px;
+}
+@media (min-width: 1024px) {
+  .chesscom-grid.main-grid {
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(360px, 420px);
+  }
 }
 
-/* Garantizar relación 1:1 si el contenedor no la provee */
+/* Contenedor del tablero centrado y cuadrado, limitado por viewport */
+.board-wrap {
+  margin-inline: auto;
+  width: 100%;
+}
+
+/* Garantizar relación 1:1 y llenar el contenedor cuadrado */
 .board {
   width: 100%;
   aspect-ratio: 1 / 1;
@@ -21,10 +36,11 @@
   margin-top: 8px;
 }
 
-/* Panel derecho: asegurar scroll interno sin barras invasivas */
-.right-panel-confined {
+/* Panel derecho: scroll independiente y altura estable */
+.right-panel-confined, .confined-scroll {
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
   min-height: 0;
-  overflow: hidden;
 }
 
 /* Compactar gaps */

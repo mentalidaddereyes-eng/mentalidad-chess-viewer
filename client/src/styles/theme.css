@@ -16,8 +16,15 @@
   /* Tablero clásico chess.com (verde/crema) */
   --light: #f0d9b5;
   --dark:  #b58863;
-  --light-green: #f0f5e8;
-  --dark-green:  #5b8c62;
+
+  /* Board palette (default green) */
+  --board-light: #f0e9d2;
+  --board-dark:  #2f6b3d;
+  --accent:      #d4af37;
+
+  /* Legacy aliases */
+  --light-green: var(--board-light);
+  --dark-green:  var(--board-dark);
 
   /* UI */
   --radius: 14px;
@@ -117,8 +124,8 @@ body {
 }
 
 /* Estilo tablero tipo chess.com (si el tablero usa divs con .square) */
-.board-wrap .square.light { background: var(--light-green); }
-.board-wrap .square.dark  { background: var(--dark-green); }
+.board-wrap .square.light { background: var(--board-light); }
+.board-wrap .square.dark  { background: var(--board-dark); }
 .board-wrap .last-move { outline: 3px solid rgba(45,184,123,.55); }
 .board-wrap .legal-dot { background: radial-gradient(circle, rgba(45,184,123,.9) 0 30%, transparent 31% 100%); }
 .board-wrap .capture-ring { outline: 3px solid rgba(231, 76, 60, .75); }
